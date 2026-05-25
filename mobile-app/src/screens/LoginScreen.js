@@ -20,6 +20,7 @@ import { Feather, FontAwesome } from '@expo/vector-icons';
 import {
   loginWithEmail,
   loginWithGoogle,
+  fetchCurrentUser,
 } from '../services/authApi';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -136,11 +137,23 @@ export default function LoginScreen({ onClose, onLoginSuccess, onNavigateRegiste
         rememberLogin,
       });
 
-      if (typeof onLoginSuccess === 'function') {
-        onLoginSuccess(response?.user || null);
+      let fullUser = response?.user || null;
+      if (fullUser) {
+        try {
+          const currentUser = await fetchCurrentUser();
+          if (currentUser) {
+            fullUser = currentUser;
+          }
+        } catch (e) {
+          console.log('Failed to fetch full user profile after login', e);
+        }
       }
 
-      Alert.alert('Đăng nhập thành công', `Xin chào ${response?.user?.fullName || response?.user?.email}`);
+      if (typeof onLoginSuccess === 'function') {
+        onLoginSuccess(fullUser);
+      }
+
+      Alert.alert('Đăng nhập thành công', `Xin chào ${fullUser?.fullName || fullUser?.email}`);
     } catch (error) {
       showNotice(error.message || 'Không thể đăng nhập.');
     } finally {
@@ -200,12 +213,24 @@ export default function LoginScreen({ onClose, onLoginSuccess, onNavigateRegiste
         rememberLogin,
       });
 
+      let fullUser = response?.user || null;
+      if (fullUser) {
+        try {
+          const currentUser = await fetchCurrentUser();
+          if (currentUser) {
+            fullUser = currentUser;
+          }
+        } catch (e) {
+          console.log('Failed to fetch full user profile after Google login', e);
+        }
+      }
+
       if (typeof onLoginSuccess === 'function') {
-        onLoginSuccess(response?.user || null);
+        onLoginSuccess(fullUser);
         return;
       }
 
-      Alert.alert('Đăng nhập Google thành công', `Xin chào ${response?.user?.fullName || response?.user?.email}`);
+      Alert.alert('Đăng nhập Google thành công', `Xin chào ${fullUser?.fullName || fullUser?.email}`);
     } catch (error) {
       const backendErrorCode = error?.data?.code;
       if (backendErrorCode === 'SOCIAL_ACCOUNT_NOT_REGISTERED') {

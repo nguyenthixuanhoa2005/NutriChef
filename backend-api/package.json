@@ -1,0 +1,31 @@
+{
+  "name": "beapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prestart": "node scripts/free-port.js 3000",
+    "start": "node server.js",
+    "backfill:recipe-ingredient-map": "node scripts/backfill-recipe-ingredient-map.js",
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "form-data": "^4.0.5",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "pip": "^0.0.1"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0"
+  }
+}

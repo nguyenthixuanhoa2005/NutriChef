@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "AppGoiY",
+    "owner": "nguyenthixuanhoa",
+    "slug": "AppGoiY",
+    "scheme": "appgoiy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "auth": {
+        "google": {
+          "expoClientId": "706730754599-vlkeh2iin93jbosk4s102strl19k95kr.apps.googleusercontent.com",
+          "iosClientId": "", 
+          "androidClientId": "",
+          "webClientId": "706730754599-vlkeh2iin93jbosk4s102strl19k95kr.apps.googleusercontent.com",
+          "redirectUri": "https://auth.expo.io/@nguyenthixuanhoa/AppGoiY"
+        }
+      }
+    }
+  }
+}

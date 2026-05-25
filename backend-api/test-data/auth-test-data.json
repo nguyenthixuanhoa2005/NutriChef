@@ -1,0 +1,56 @@
+[
+  {
+    "case": "login_valid_active_user",
+    "email": "hoa@gmail.com",
+    "password": "Hoa_24122005",
+    "expectedStatus": 200
+  },
+  {
+    "case": "login_valid_another_active_user",
+    "email": "nam@gmail.com",
+    "password": "Abc@123",
+    "expectedStatus": 200
+  },
+  {
+    "case": "login_wrong_password",
+    "email": "hoa@gmail.com",
+    "password": "Abc@1237",
+    "expectedStatus": 401
+  },
+  {
+    "case": "login_blocked_user",
+    "email": "cuc@gmail.com",
+    "password": "Abc@123",
+    "expectedStatus": 401
+  },
+  {
+    "case": "login_deleted_user",
+    "email": "dat@gmail.com",
+    "password": "Abc@123",
+    "expectedStatus": 401
+  },
+  {
+    "case": "login_missing_password",
+    "email": "hoa@gmail.com",
+    "password": "",
+    "expectedStatus": 400
+  },
+  {
+    "case": "login_missing_email",
+    "email": "",
+    "password": "Abc@123",
+    "expectedStatus": 400
+  },
+  {
+    "case": "login_missing_email_and_password",
+    "email": "",
+    "password": "",
+    "expectedStatus": 400
+  },
+  {
+    "case": "login_nonexistent_user",
+    "email": "helloxinchao@gmail.com",
+    "password": "Abc@1237",
+    "expectedStatus": 401
+  }
+]

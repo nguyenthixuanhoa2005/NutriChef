@@ -1,0 +1,71 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Node.js (backend + mobile)
+node_modules/
+backend-api/node_modules/
+mobile-app/node_modules/
+
+# Build / cache
+coverage/
+dist/
+build/
+.tmp/
+tmp/
+.cache/
+
+# Expo / React Native
+mobile-app/.expo/
+mobile-app/.expo-shared/
+mobile-app/web-build/
+mobile-app/.metro-health-check*
+mobile-app/android/
+mobile-app/ios/
+mobile-app/tempCodeRunnerFile.js
+
+# Backend runtime files
+backend-api/uploads/
+backend-api/*.sqlite
+
+# Python (ai-service)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.venv/
+venv/
+env/
+
+# AI generated artifacts
+ai-service/runs/
+ai-service/temp_uploads/
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.7z

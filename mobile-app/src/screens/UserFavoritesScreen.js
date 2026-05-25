@@ -49,6 +49,7 @@ const mealTypeLabel = (value) => {
 export default function UserFavoritesScreen({
   isGuest = false,
   user,
+  usageCount,
   onLoginPress,
   onSignupPress,
   onRequestLogout,
@@ -360,7 +361,12 @@ export default function UserFavoritesScreen({
       </ScrollView>
 
       {!isGuest ? (
-        <AppBottomNav activeKey="favorites" onTabPress={handleBottomTabPress} />
+        <AppBottomNav
+          activeKey="favorites"
+          onTabPress={handleBottomTabPress}
+          user={user}
+          usageCount={usageCount}
+        />
       ) : null}
     </SafeAreaView>
   );

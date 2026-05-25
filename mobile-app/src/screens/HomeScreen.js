@@ -154,6 +154,7 @@ export default function HomeScreen({
   onOpenRecipeDetail,
   isGuest,
   user,
+  usageCount,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -468,6 +469,8 @@ export default function HomeScreen({
           role="user"
           activeKey="home"
           onTabPress={handleBottomTabPress}
+          user={user}
+          usageCount={usageCount}
         />
       ) : null}
     </SafeAreaView>

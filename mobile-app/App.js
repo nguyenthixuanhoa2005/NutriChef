@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import HomeScreen from './src/screens/HomeScreen';
 import IngredientSuggestionScreen from './src/screens/IngredientSuggestionScreen';
@@ -26,6 +27,91 @@ export default function App() {
   const [selectedRecipeId, setSelectedRecipeId] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [usageCount, setUsageCount] = useState(0);
+
+  const MAX_FREE_USAGE = 3;
+  const isPremium = currentUser?.premium && (!currentUser.premium.expiryDate || new Date(currentUser.premium.expiryDate) > new Date());
+  const isLimitReached = !isPremium && usageCount >= MAX_FREE_USAGE;
+
+  const getTodayKey = () => {
+    const now = new Date();
+    return `usage_${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+  };
+
+  const loadUsage = useCallback(async () => {
+    try {
+      const key = getTodayKey();
+      const saved = await AsyncStorage.getItem(key);
+      if (saved) {
+        setUsageCount(parseInt(saved, 10) || 0);
+      } else {
+        setUsageCount(0);
+      }
+    } catch (e) {
+      console.error('Failed to load usage count', e);
+    }
+  }, []);
+
+  const incrementUsage = async () => {
+    if (isPremium) return;
+    try {
+      const key = getTodayKey();
+      const nextCount = usageCount + 1;
+      await AsyncStorage.setItem(key, String(nextCount));
+      setUsageCount(nextCount);
+    } catch (e) {
+      console.error('Failed to save usage count', e);
+    }
+  };
+
+  useEffect(() => {
+    loadUsage();
+  }, [loadUsage]);
+
+  const handleSuggestTabPress = () => {
+    if (isLimitReached) {
+      Alert.alert(
+        'Giới hạn lượt dùng',
+        'Bạn cần nâng cấp để mở khóa tính năng này (Bạn đã dùng hết 3 lượt miễn phí hôm nay).',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Nâng cấp ngay', onPress: () => navigateTo('upgrade') },
+        ]
+      );
+      return;
+    }
+    navigateTo('suggest');
+  };
+
+  const handleMealTabPress = () => {
+    if (!isPremium) {
+      Alert.alert(
+        'Tính năng Premium',
+        'Tính năng Mâm cơm chỉ dành cho thành viên Premium. Hãy nâng cấp để trải nghiệm trọn vẹn!',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Nâng cấp ngay', onPress: () => navigateTo('upgrade') },
+        ]
+      );
+      return;
+    }
+    navigateTo('meal');
+  };
+
+  const handleRecipeSubmitTabPress = () => {
+    if (!isPremium) {
+      Alert.alert(
+        'Tính năng Premium',
+        'Tính năng Đóng góp công thức chỉ dành cho thành viên Premium. Hãy nâng cấp để đóng góp nội dung!',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Nâng cấp ngay', onPress: () => navigateTo('upgrade') },
+        ]
+      );
+      return;
+    }
+    navigateTo('recipe-submit');
+  };
 
   const resetTo = useCallback((screenKey) => {
     setScreenHistory([]);
@@ -221,12 +307,13 @@ export default function App() {
       return (
         <UserUpgradeScreen
           user={currentUser}
+          usageCount={usageCount}
           onUserUpdate={setCurrentUser}
           onLogout={handleLogout}
           onNavigateHome={() => setActiveScreen('home')}
-          onNavigateSuggest={() => setActiveScreen('suggest')}
-          onNavigateMeal={() => setActiveScreen('meal')}
-          onNavigateRecipeSubmission={() => setActiveScreen('recipe-submit')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => setActiveScreen('favorites')}
         />
       );
@@ -237,11 +324,13 @@ export default function App() {
         <IngredientSuggestionScreen
           isGuest={!currentUser}
           user={currentUser}
+          usageCount={usageCount}
+          onSuggestSuccess={incrementUsage}
           onLoginPress={() => navigateTo('login')}
           onSignupPress={() => navigateTo('register')}
           onNavigateHome={() => navigateTo('home')}
-          onNavigateMeal={() => navigateTo('meal')}
-          onNavigateRecipeSubmission={() => navigateTo('recipe-submit')}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onGoBack={() => goBack('home')}
@@ -255,11 +344,12 @@ export default function App() {
         <UserMealSetScreen
           isGuest={!currentUser}
           user={currentUser}
+          usageCount={usageCount}
           onLoginPress={() => navigateTo('login')}
           onGoBack={() => goBack('home')}
           onNavigateHome={() => navigateTo('home')}
-          onNavigateSuggest={() => navigateTo('suggest')}
-          onNavigateRecipeSubmission={() => navigateTo('recipe-submit')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onOpenRecipeDetail={handleOpenRecipeDetail}
@@ -273,11 +363,12 @@ export default function App() {
         <UserFavoritesScreen
           isGuest={!currentUser}
           user={currentUser}
+          usageCount={usageCount}
           onLoginPress={() => navigateTo('login')}
           onNavigateHome={() => navigateTo('home')}
-          onNavigateSuggest={() => navigateTo('suggest')}
-          onNavigateMeal={() => navigateTo('meal')}
-          onNavigateRecipeSubmission={() => navigateTo('recipe-submit')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onOpenRecipeDetail={handleOpenRecipeDetail}
           onRequestLogout={handleLogout}
@@ -290,10 +381,11 @@ export default function App() {
         <RecipeSubmissionScreen
           isGuest={!currentUser}
           user={currentUser}
+          usageCount={usageCount}
           onLoginPress={() => navigateTo('login')}
           onNavigateHome={() => navigateTo('home')}
-          onNavigateSuggest={() => navigateTo('suggest')}
-          onNavigateMeal={() => navigateTo('meal')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onRequestLogout={handleLogout}
@@ -317,14 +409,15 @@ export default function App() {
         onLoginPress={() => navigateTo('login')}
         onSignupPress={() => navigateTo('register')}
         onRequestLogout={handleLogout}
-        onNavigateSuggest={() => navigateTo('suggest')}
-        onNavigateMeal={() => navigateTo('meal')}
-        onNavigateRecipeSubmission={() => navigateTo('recipe-submit')}
+        onNavigateSuggest={handleSuggestTabPress}
+        onNavigateMeal={handleMealTabPress}
+        onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
         onNavigateFavorites={() => navigateTo('favorites')}
         onNavigateUpgrade={() => navigateTo('upgrade')}
         onOpenRecipeDetail={handleOpenRecipeDetail}
         isGuest={!currentUser}
         user={currentUser}
+        usageCount={usageCount}
       />
     );
   };

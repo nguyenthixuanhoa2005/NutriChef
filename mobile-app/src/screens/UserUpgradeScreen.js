@@ -85,6 +85,7 @@ const PlanCard = ({ plan, onSelect, isSelected }) => {
 
 export default function UserUpgradeScreen({
   user: initialUser,
+  usageCount,
   onUserUpdate,
   onLogout,
   onNavigateHome,
@@ -369,7 +370,12 @@ export default function UserUpgradeScreen({
         </View>
       </Modal>
 
-      <AppBottomNav activeKey="upgrade" onTabPress={handleBottomTabPress} />
+      <AppBottomNav
+        activeKey="upgrade"
+        onTabPress={handleBottomTabPress}
+        user={user}
+        usageCount={usageCount}
+      />
 
       {/* MODAL THÀNH CÔNG */}
       <Modal visible={showSuccessModal} transparent animationType="slide">

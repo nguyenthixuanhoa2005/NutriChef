@@ -120,9 +120,12 @@ export function AppHeader({
   );
 }
 
-export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user' }) {
+export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user', user, usageCount = 0 }) {
   const navItems = role === 'admin' ? ADMIN_NAV_ITEMS : USER_NAV_ITEMS;
   const isUserRole = role !== 'admin';
+  const MAX_FREE_USAGE = 3;
+  const isPremium = user?.premium && (!user.premium.expiryDate || new Date(user.premium.expiryDate) > new Date());
+  const isLimitReached = !isPremium && usageCount >= MAX_FREE_USAGE;
 
   return (
     <View style={[styles.bottomNavWrap, isUserRole && styles.bottomNavWrapUser]}>
@@ -131,6 +134,13 @@ export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user' }) 
           const active = item.key === activeKey;
           const iconColor = active ? '#ffffff' : '#4b5563';
           const iconSize = 23;
+          
+          let showLimitCrown = false;
+          if (item.key === 'suggest') {
+            showLimitCrown = isLimitReached;
+          } else if (item.key === 'menu' || item.key === 'recipes') {
+            showLimitCrown = !isPremium;
+          }
 
           return (
             <Pressable
@@ -140,6 +150,11 @@ export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user' }) 
             >
               <View style={[styles.navIconBubble, active && styles.navIconBubbleActive]}>
                 <NavIcon {...item.icon} size={iconSize} color={iconColor} />
+                {showLimitCrown && (
+                  <View style={styles.navLimitCrown}>
+                    <MaterialCommunityIcons name="crown" size={10} color="#f59e0b" />
+                  </View>
+                )}
               </View>
               <Text numberOfLines={2} style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
             </Pressable>
@@ -324,6 +339,16 @@ const styles = StyleSheet.create({
   },
   navIconBubbleActive: {
     backgroundColor: '#f97316',
+  },
+  navLimitCrown: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 1,
   },
   navLabel: {
     marginTop: 4,

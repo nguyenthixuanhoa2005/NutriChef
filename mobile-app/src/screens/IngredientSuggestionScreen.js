@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,6 +20,7 @@ import {
   Feather,
   Ionicons,
   AntDesign,
+  MaterialCommunityIcons,
 } from '@expo/vector-icons';
 import { AppBottomNav, AppHeader } from '../components/AppChrome';
 import { API_BASE_URL, authRequest, request } from '../services/client';
@@ -170,9 +172,11 @@ const InputMethodCard = ({ item, active, onPress }) => {
   );
 };
 
-export default function IngredientSuggestionScreenV2({
+export default function IngredientSuggestionScreen({
   isGuest = false,
   user,
+  usageCount = 0,
+  onSuggestSuccess,
   onLoginPress,
   onSignupPress,
   onNavigateHome,
@@ -203,6 +207,10 @@ export default function IngredientSuggestionScreenV2({
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedRecipeFavorite, setSelectedRecipeFavorite] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
+
+  const MAX_FREE_USAGE = 3;
+  const isPremium = user?.premium && (!user.premium.expiryDate || new Date(user.premium.expiryDate) > new Date());
+  const isLimitReached = !isPremium && usageCount >= MAX_FREE_USAGE;
 
   const displayName = useMemo(() => user?.fullName || user?.name || 'Người dùng', [user]);
   const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
@@ -667,6 +675,18 @@ export default function IngredientSuggestionScreenV2({
   };
 
   const handleFindDishes = async () => {
+    if (isLimitReached) {
+      Alert.alert(
+        'Giới hạn lượt dùng',
+        'Bạn cần nâng cấp để mở khóa tính năng này (Bạn đã dùng hết 3 lượt miễn phí hôm nay).',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Nâng cấp ngay', onPress: () => onNavigateUpgrade?.() },
+        ]
+      );
+      return;
+    }
+
     const cleaned = ingredients.map(normalizeIngredient).filter(Boolean);
     if (cleaned.length === 0) {
       Alert.alert('Thiếu dữ liệu', 'Danh sách nguyên liệu đang trống.');
@@ -695,6 +715,9 @@ export default function IngredientSuggestionScreenV2({
       setSuggestions(recipes);
       setSelectedRecipe(recipes[0] || null);
       setStep(3);
+      
+      // Tăng số lượt dùng sau khi gợi ý thành công
+      await onSuggestSuccess?.();
     } catch (error) {
       Alert.alert('Lỗi gợi ý', error.message || 'Không lấy được danh sách món ăn.');
     } finally {
@@ -889,7 +912,8 @@ export default function IngredientSuggestionScreenV2({
         <Pressable onPress={() => setStep(1)} style={styles.outlineButton}>
           <Text style={styles.outlineButtonText}>Quay lại</Text>
         </Pressable>
-        <Pressable onPress={handleFindDishes} style={[styles.primaryButton, styles.flexButton]}>
+        <Pressable onPress={handleFindDishes} style={[styles.primaryButton, styles.flexButton, isLimitReached && styles.limitButton]}>
+          {isLimitReached && <MaterialCommunityIcons name="crown" size={18} color="#fff" />}
           <Text style={styles.primaryButtonText}>Tìm món ăn</Text>
         </Pressable>
       </View>
@@ -1073,6 +1097,8 @@ export default function IngredientSuggestionScreenV2({
         <AppBottomNav
           activeKey="suggest"
           onTabPress={handleBottomTabPress}
+          user={user}
+          usageCount={usageCount}
         />
       ) : null}
     </SafeAreaView>
@@ -1432,6 +1458,11 @@ const styles = StyleSheet.create({
   flexButton: {
     flex: 1,
     marginTop: 0,
+  },
+  limitButton: {
+    backgroundColor: '#b45309',
+    borderColor: '#f59e0b',
+    borderWidth: 1,
   },
   summaryBox: {
     backgroundColor: '#f9fafb',

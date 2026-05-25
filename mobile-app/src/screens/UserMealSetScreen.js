@@ -284,6 +284,7 @@ const goalLabelByKey = (goalKey) => {
 export default function UserMealSetScreen({
   isGuest = false,
   user,
+  usageCount,
   onLoginPress,
   onSignupPress,
   onGoBack,
@@ -968,7 +969,12 @@ export default function UserMealSetScreen({
       ) : null}
 
       {!isGuest ? (
-        <AppBottomNav activeKey="menu" onTabPress={handleBottomTabPress} />
+        <AppBottomNav
+          activeKey="menu"
+          onTabPress={handleBottomTabPress}
+          user={user}
+          usageCount={usageCount}
+        />
       ) : null}
     </SafeAreaView>
   );

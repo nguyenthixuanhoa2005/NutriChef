@@ -107,6 +107,7 @@ const validateSubmissionForm = (form) => {
 export default function RecipeSubmissionScreen({
   isGuest = false,
   user,
+  usageCount,
   onLoginPress,
   onSignupPress,
   onNavigateHome,
@@ -297,8 +298,8 @@ export default function RecipeSubmissionScreen({
               <Feather name="edit-3" size={18} color="#f97316" />
             </View>
             <View style={styles.heroTextWrap}>
-              <Text style={styles.title}>Gửi công thức mới</Text>
-              <Text style={styles.subTitle}>Công thức sẽ vào hàng đợi kiểm duyệt trước khi lưu chính thức.</Text>
+              <Text style={styles.title}>Đóng góp công thức</Text>
+              <Text style={styles.subTitle}>Công thức sẽ được kiểm duyệt bởi admin!</Text>
             </View>
           </View>
 
@@ -462,6 +463,8 @@ export default function RecipeSubmissionScreen({
         <AppBottomNav
           role="user"
           activeKey="recipes"
+          user={user}
+          usageCount={usageCount}
           onTabPress={(tabKey) => {
             if (tabKey === 'home') {
               onNavigateHome?.();
@@ -477,17 +480,17 @@ export default function RecipeSubmissionScreen({
               onNavigateMeal?.();
               return;
             }
-if (tabKey === 'favorites') {
-  onNavigateFavorites?.();
-  return;
-}
+            if (tabKey === 'favorites') {
+              onNavigateFavorites?.();
+              return;
+            }
 
-if (tabKey === 'upgrade') {
-  onNavigateUpgrade?.();
-  return;
-}
-}}
-/>
+            if (tabKey === 'upgrade') {
+              onNavigateUpgrade?.();
+              return;
+            }
+          }}
+        />
       ) : null}
     </SafeAreaView>
   );
@@ -538,6 +541,7 @@ const styles = StyleSheet.create({
   subTitle: {
     color: '#6b7280',
     fontSize: 13,
+    marginTop: 5,
   },
   fieldTitle: {
     marginTop: 2,

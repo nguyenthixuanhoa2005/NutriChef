@@ -274,7 +274,7 @@ export default function AdminIngredientsScreen({ onLogout, user, onNavigateOverv
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen((v) => !v)} />
+      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen((v) => !v)} user={user} />
 
       {menuOpen ? (
         <View style={styles.menuPopup}>

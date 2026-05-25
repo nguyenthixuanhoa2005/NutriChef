@@ -85,6 +85,7 @@ const PlanCard = ({ plan, onSelect, isSelected }) => {
 
 export default function UserUpgradeScreen({
   user: initialUser,
+  onUserUpdate,
   onLogout,
   onNavigateHome,
   onNavigateSuggest,
@@ -111,11 +112,12 @@ export default function UserUpgradeScreen({
       const response = await authRequest('/api/auth/me');
       if (response.status === 'success') {
         setUser(response.user);
+        onUserUpdate?.(response.user);
       }
     } catch (error) {
       console.error('Lỗi lấy thông tin user:', error);
     }
-  }, []);
+  }, [onUserUpdate]);
 
   const fetchPlans = useCallback(async () => {
     try {
@@ -245,7 +247,7 @@ export default function UserUpgradeScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} />
+      <AppHeader user={user} onUpgradePress={fetchProfile} isGuest={false} onAccountPress={onLogout} />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {user?.premium ? (

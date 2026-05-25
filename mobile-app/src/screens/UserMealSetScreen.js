@@ -707,6 +707,8 @@ export default function UserMealSetScreen({
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <AppHeader
+        user={user}
+        onUpgradePress={onNavigateUpgrade}
         onLoginPress={onLoginPress}
         onSignupPress={onLoginPress}
         isGuest={isGuest}

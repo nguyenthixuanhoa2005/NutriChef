@@ -351,6 +351,8 @@ export default function HomeScreen({
         onLoginPress={onLoginPress}
         onSignupPress={onSignupPress}
         isGuest={isGuest}
+        user={user}
+        onUpgradePress={onNavigateUpgrade}
         onAccountPress={() => setMenuOpen((current) => !current)}
       />
 

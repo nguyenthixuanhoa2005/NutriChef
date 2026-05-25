@@ -78,7 +78,7 @@ export default function AdminDashboardScreen({
   if (loading) {
     return (
       <SafeAreaView style={styles.screen}>
-        <AppHeader isGuest={false} />
+        <AppHeader isGuest={false} user={user} />
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color="#6366f1" />
           <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
@@ -90,7 +90,7 @@ export default function AdminDashboardScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} />
+      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
       
       <ScrollView 
         style={styles.mainContainer} 

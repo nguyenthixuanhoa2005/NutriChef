@@ -167,6 +167,7 @@ const validateAdminCreateForm = (form) => {
 };
 
 export default function AdminRecipeReviewScreen({
+  user,
   onBackToAdmin,
   onLogout,
   onNavigateOverview,
@@ -428,7 +429,7 @@ export default function AdminRecipeReviewScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} />
+      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
 
       {viewMode === 'catalog' ? (
         <View style={styles.topActions}>

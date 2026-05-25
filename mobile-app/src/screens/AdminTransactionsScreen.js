@@ -79,6 +79,7 @@ const TransactionItem = ({ item }) => (
 );
 
 export default function AdminTransactionsScreen({
+  user,
   onLogout,
   onNavigateOverview,
   onNavigateIngredients,
@@ -126,7 +127,7 @@ export default function AdminTransactionsScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} />
+      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
       
       <View style={styles.container}>
         <View style={styles.header}>

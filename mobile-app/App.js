@@ -221,6 +221,7 @@ export default function App() {
       return (
         <UserUpgradeScreen
           user={currentUser}
+          onUserUpdate={setCurrentUser}
           onLogout={handleLogout}
           onNavigateHome={() => setActiveScreen('home')}
           onNavigateSuggest={() => setActiveScreen('suggest')}

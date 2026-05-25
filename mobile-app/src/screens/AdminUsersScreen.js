@@ -57,6 +57,7 @@ const UserCard = ({ user, onPress, onEdit, onDelete }) => (
 );
 
 export default function AdminUsersScreen({
+  user,
   onLogout,
   onNavigateOverview,
   onNavigateIngredients,
@@ -192,7 +193,7 @@ export default function AdminUsersScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} />
+      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quản lý người dùng</Text>

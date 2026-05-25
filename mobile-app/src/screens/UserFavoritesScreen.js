@@ -183,6 +183,8 @@ export default function UserFavoritesScreen({
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <AppHeader
+        user={user}
+        onUpgradePress={onNavigateUpgrade}
         onLoginPress={onLoginPress}
         onSignupPress={onSignupPress}
         isGuest={isGuest}

@@ -28,11 +28,6 @@ const USER_NAV_ITEMS = [
     label: 'Yêu thích',
     icon: { family: Feather, name: 'heart' },
   },
-  {
-    key: 'upgrade',
-    label: 'Nâng cấp',
-    icon: { family: MaterialCommunityIcons, name: 'crown-outline' },
-  },
 ];
 
 const ADMIN_NAV_ITEMS = [
@@ -72,7 +67,14 @@ export function AppHeader({
   onSignupPress,
   isGuest = true,
   onAccountPress,
+  user,
+  onUpgradePress,
 }) {
+  const isAdmin = user?.role === 'admin';
+  const premiumData = user?.premium;
+  const isPremiumActive =
+    premiumData && (!premiumData.expiryDate || new Date(premiumData.expiryDate) > new Date());
+
   return (
     <View style={styles.headerWrap}>
       <View style={styles.headerBar}>
@@ -94,6 +96,20 @@ export function AppHeader({
           </View>
         ) : (
           <View style={styles.authenticatedActions}>
+            {isAdmin ? (
+              <View style={[styles.upgradeBadge, styles.adminBadge]}>
+                <Feather name="shield" size={14} color="#0ea5e9" />
+                <Text style={[styles.upgradeText, styles.adminText]}>Quản trị viên</Text>
+              </View>
+            ) : (
+              <Pressable style={styles.upgradeBadge} onPress={onUpgradePress}>
+                <MaterialCommunityIcons name="crown" size={16} color="#f59e0b" />
+                <Text style={styles.upgradeText}>
+                  {isPremiumActive ? premiumData.planName : 'Nâng cấp Premium'}
+                </Text>
+              </Pressable>
+            )}
+
             <Pressable style={styles.avatarBubble} onPress={onAccountPress}>
               <Feather name="user" size={18} color="#ffffff" />
             </Pressable>
@@ -162,6 +178,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexShrink: 1,
+    marginLeft: 4,
   },
   brandIcon: {
     width: 42,
@@ -186,12 +203,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginLeft: 8,
+    marginRight: 4,
   },
   authenticatedActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginLeft: 8,
+    marginRight: 4,
+  },
+  upgradeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    gap: 6,
+  },
+  upgradeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#b45309',
+  },
+  adminBadge: {
+    backgroundColor: '#f0f9ff',
+    borderColor: '#bae6fd',
+  },
+  adminText: {
+    color: '#0369a1',
   },
   avatarBubble: {
     width: 36,

@@ -21,6 +21,8 @@ VALID_INGREDIENTS_MAP = {
     "carrot": "Cà rốt", "potted plant": "Rau xanh", "sandwich": "Bánh mì",
     "cake": "Bánh ngọt", "hot dog": "Xúc xích", "pizza": "Pizza",
     "donut": "Bánh ngọt", "bird": "Thịt gà", "cow": "Thịt bò", "fish": "Cá",
+    "noddle": "Mì", "egg": "Trứng", "meat": "Thịt lợn", "shrimp": "Tôm",
+    
 }
 
 VOICE_INGREDIENT_ALIASES = {
@@ -46,10 +48,11 @@ VOICE_MATCHERS = []
 
 def normalize_text(text):
     if not text: return ""
-    lowered = str(text).strip().lower()
-    no_accent = unicodedata.normalize("NFD", lowered)
-    no_accent = "".join(ch for ch in no_accent if unicodedata.category(ch) != "Mn")
-    only_text = re.sub(r"[^a-z0-9\s]", " ", no_accent)
+    # Sử dụng NFC để đảm bảo các ký tự có dấu được chuẩn hóa đồng nhất
+    text = unicodedata.normalize("NFC", str(text))
+    lowered = text.strip().lower()
+    # Giữ lại các ký tự chữ cái (bao gồm có dấu) và số, thay thế ký tự đặc biệt bằng khoảng trắng
+    only_text = re.sub(r"[^\w\s]", " ", lowered)
     return re.sub(r"\s+", " ", only_text).strip()
 
 def rebuild_voice_matchers():

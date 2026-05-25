@@ -255,6 +255,7 @@ export default function App() {
     if (activeScreen === 'admin-users') {
       return (
         <AdminUsersScreen
+          user={currentUser}
           onBack={() => setActiveScreen('admin')}
           onLogout={handleLogout}
           onNavigateOverview={() => setActiveScreen('admin')}
@@ -281,6 +282,7 @@ export default function App() {
     if (activeScreen === 'admin-recipe-review') {
       return (
         <AdminRecipeReviewScreen
+          user={currentUser}
           onBackToAdmin={() => setActiveScreen('admin')}
           onLogout={handleLogout}
           onNavigateOverview={() => setActiveScreen('admin')}
@@ -294,6 +296,7 @@ export default function App() {
     if (activeScreen === 'admin-transactions') {
       return (
         <AdminTransactionsScreen
+          user={currentUser}
           onLogout={handleLogout}
           onNavigateOverview={() => setActiveScreen('admin')}
           onNavigateIngredients={() => setActiveScreen('admin-ingredients')}

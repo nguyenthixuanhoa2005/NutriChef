@@ -20,14 +20,14 @@ async function addIngredient(db, { name, type, image_url, is_common, keywords } 
     const normalizedName = String(name).trim();
     
     // Kiểm tra trùng tên (không phân biệt hoa thường, chỉ xét các nguyên liệu đang ACTIVE)
-    // const existing = await db.query(
-    //     'SELECT ingredient_id FROM ingredient WHERE LOWER(name) = LOWER($1) AND status = $2 LIMIT 1',
-    //     [normalizedName, INGREDIENT_STATUS_ACTIVE]
-    // );
+    const existing = await db.query(
+        'SELECT ingredient_id FROM ingredient WHERE LOWER(name) = LOWER($1) AND status = $2 LIMIT 1',
+        [normalizedName, INGREDIENT_STATUS_ACTIVE]
+    );
 
-    // if (existing.rows.length > 0) {
-    //     throw new AppError(`Nguyen lieu "${normalizedName}" da ton tai trong he thong`, 400);
-    // }
+    if (existing.rows.length > 0) {
+        throw new AppError(`Nguyen lieu "${normalizedName}" da ton tai trong he thong`, 400);
+    }
 
     const result = await db.query(ADD_INGREDIENT_QUERY, [
         normalizedName,

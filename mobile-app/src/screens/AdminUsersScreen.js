@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { AppHeader, AppBottomNav } from '../components/AppChrome';
+import { AppHeader, AppBottomNav, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const { width } = Dimensions.get('window');
@@ -63,7 +63,8 @@ export default function AdminUsersScreen({
   onNavigateIngredients,
   onNavigateRecipeReview,
   onNavigateTransactions
-}) {  const [users, setUsers] = useState([]);
+}) {  const [menuOpen, setMenuOpen] = useState(false);
+  const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -193,7 +194,15 @@ export default function AdminUsersScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
+      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen(true)} user={user} />
+      
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
+
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quản lý người dùng</Text>

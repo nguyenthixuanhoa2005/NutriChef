@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const { width } = Dimensions.get('window');
@@ -57,6 +57,7 @@ export default function AdminDashboardScreen({
   const [stats, setStats] = useState(null);
   const [recentActivities, setRecentActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -90,7 +91,18 @@ export default function AdminDashboardScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
+      <AppHeader 
+        isGuest={false} 
+        onAccountPress={() => setMenuOpen(true)} 
+        user={user} 
+      />
+
+      <AppAccountMenu 
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
       
       <ScrollView 
         style={styles.mainContainer} 

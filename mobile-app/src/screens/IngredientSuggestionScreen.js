@@ -22,7 +22,7 @@ import {
   AntDesign,
   MaterialCommunityIcons,
 } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { API_BASE_URL, authRequest, request } from '../services/client';
 
 const INPUT_METHODS = [
@@ -207,13 +207,11 @@ export default function IngredientSuggestionScreen({
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedRecipeFavorite, setSelectedRecipeFavorite] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
 
   const MAX_FREE_USAGE = 3;
   const isPremium = user?.premium && (!user.premium.expiryDate || new Date(user.premium.expiryDate) > new Date());
   const isLimitReached = !isPremium && usageCount >= MAX_FREE_USAGE;
-
-  const displayName = useMemo(() => user?.fullName || user?.name || 'Người dùng', [user]);
-  const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
 
   const ingredientOptions = useMemo(() => {
     const prioritized = [...ingredientCatalog].sort((left, right) => {
@@ -226,7 +224,8 @@ export default function IngredientSuggestionScreen({
       return String(left.name || '').localeCompare(String(right.name || ''));
     });
 
-    return prioritized.slice(0, 30).map((item) => item.name);
+    const uniqueNames = [...new Set(prioritized.map((item) => item.name))];
+    return uniqueNames.slice(0, 30);
   }, [ingredientCatalog]);
 
   useEffect(() => {
@@ -713,7 +712,7 @@ export default function IngredientSuggestionScreen({
 
       const recipes = Array.isArray(data?.recipes) ? data.recipes : [];
       setSuggestions(recipes);
-      setSelectedRecipe(recipes[0] || null);
+      setSuggestionIndex(0);
       setStep(3);
       
       // Tăng số lượt dùng sau khi gợi ý thành công
@@ -724,6 +723,16 @@ export default function IngredientSuggestionScreen({
       setLoading(false);
     }
   };
+
+  const handleNextSuggestion = () => {
+    if (suggestions.length <= 1) {
+      Alert.alert('Hết gợi ý', 'Không còn món ăn nào khác khớp với nguyên liệu của bạn.');
+      return;
+    }
+    setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+  };
+
+  const currentRecipe = suggestions[suggestionIndex] || null;
   const handleBottomTabPress = (tabKey) => {
     if (tabKey === 'home') {
       onNavigateHome?.();
@@ -921,7 +930,7 @@ export default function IngredientSuggestionScreen({
   );
 
   const renderRecipeDetail = () => {
-    if (!selectedRecipe) {
+    if (!currentRecipe) {
       return (
         <View style={styles.emptySuggestionLarge}>
           <Ionicons name="search-outline" size={48} color="#94a3b8" />
@@ -932,13 +941,13 @@ export default function IngredientSuggestionScreen({
       );
     }
 
-    const recipeIngredients = parseIngredientList(selectedRecipe.ingredients_json);
-    const recipeSteps = parseStepList(selectedRecipe.steps_json);
+    const recipeIngredients = parseIngredientList(currentRecipe.ingredients_json);
+    const recipeSteps = parseStepList(currentRecipe.steps_json);
 
     return (
       <View style={styles.recipeDetailCard}>
         <View style={styles.recipeHeroWrap}>
-          <Image source={{ uri: resolveRecipeImage(selectedRecipe.image_url) }} style={styles.recipeHeroImage} />
+          <Image source={{ uri: resolveRecipeImage(currentRecipe.image_url) }} style={styles.recipeHeroImage} />
           <View style={styles.recipeImageActions}>
             <Pressable
               onPress={handleToggleRecipeFavorite}
@@ -949,7 +958,7 @@ export default function IngredientSuggestionScreen({
               <Feather name="heart" size={18} color={selectedRecipeFavorite ? '#ef4444' : '#344054'} />
             </Pressable>
             <Pressable
-              onPress={() => Alert.alert('Chia sẻ', `Copy link chia sẻ cho "${selectedRecipe.title}" (demo UI).`)}
+              onPress={() => Alert.alert('Chia sẻ', `Copy link chia sẻ cho "${currentRecipe.title}" (demo UI).`)}
               style={styles.recipeImageActionButton}
               hitSlop={8}
             >
@@ -957,12 +966,24 @@ export default function IngredientSuggestionScreen({
             </Pressable>
           </View>
         </View>
-        <Text style={styles.recipeDetailTitle}>{selectedRecipe.title}</Text>
+        <Text style={styles.recipeDetailTitle}>{currentRecipe.title}</Text>
 
         <View style={styles.recipeMetaRow}>
-          <Text style={styles.recipeMetaItem}>Thời gian: {selectedRecipe.cooking_time || '--'} phút</Text>
-          <Text style={styles.recipeMetaItem}>Độ khó: {selectedRecipe.difficulty || '--'}</Text>
-          <Text style={styles.recipeMetaItem}>Calories: {selectedRecipe.total_calories || 0} kcal</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={styles.recipeMetaItem}>Thời gian: {currentRecipe.cooking_time || '--'} phút</Text>
+              <Text style={styles.recipeMetaItem}>Độ khó: {currentRecipe.difficulty || '--'}</Text>
+              <Text style={styles.recipeMetaItem}>Calories: {currentRecipe.total_calories || 0} kcal</Text>
+            </View>
+            {currentRecipe.match_count && (
+              <View style={{ backgroundColor: '#fff7ed', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#ffedd5' }}>
+                <Text style={{ color: '#f97316', fontWeight: '800', fontSize: 16 }}>
+                  {currentRecipe.match_count}
+                </Text>
+                <Text style={{ color: '#9a3412', fontSize: 10, fontWeight: '600' }}>KHỚP</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Nguyên liệu cần thiết:</Text>
@@ -991,8 +1012,12 @@ export default function IngredientSuggestionScreen({
 
   const renderStepThreeContent = () => (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Kết quả gợi ý món ăn</Text>
-      <Text style={styles.descriptionText}>Toàn bộ dữ liệu được lấy trực tiếp từ cơ sở dữ liệu.</Text>
+      <Text style={styles.cardTitle}>Kết quả gợi ý công thức</Text>
+      <Text style={styles.descriptionText}>
+        {suggestions.length > 0 
+          ? `Tìm thấy ${suggestions.length} món ăn. Đang hiển thị món phù hợp nhất.`
+          : 'Công thức đã được sự kiểm duyệt từ các chuyên gia'}
+      </Text>
 
       <View style={styles.summaryBox}>
         <Text style={styles.summaryLabel}>Nguyên liệu đã chọn</Text>
@@ -1005,28 +1030,17 @@ export default function IngredientSuggestionScreen({
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recipeTabs} contentContainerStyle={styles.recipeTabsContent}>
-        {suggestions.map((dish) => {
-          const active = dish.recipe_id === selectedRecipe?.recipe_id;
-          return (
-            <Pressable key={dish.recipe_id} style={[styles.recipeTab, active && styles.recipeTabActive]} onPress={() => setSelectedRecipe(dish)}>
-              <Text style={[styles.recipeTabText, active && styles.recipeTabTextActive]}>{dish.title}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
       {renderRecipeDetail()}
 
       <View style={styles.footerActions}>
-        <Pressable onPress={() => setStep(1)} style={[styles.primaryButton, styles.flexButton]}>
-          <Text style={styles.primaryButtonText}>Nhận gợi ý khác</Text>
+        <Pressable onPress={handleNextSuggestion} style={[styles.primaryButton, styles.flexButton]}>
+          <Text style={styles.primaryButtonText}>Gợi ý khác</Text>
         </Pressable>
         <Pressable
-          onPress={() => onNavigateHome?.()}
+          onPress={() => setStep(1)}
           style={styles.outlineButton}
         >
-          <Text style={styles.outlineButtonText}>Trang chủ</Text>
+          <Text style={styles.outlineButtonText}>Làm lại</Text>
         </Pressable>
       </View>
     </View>
@@ -1043,49 +1057,12 @@ export default function IngredientSuggestionScreen({
         onAccountPress={handleAccountPress}
       />
 
-      {!isGuest ? (
-        <Modal
-          visible={menuOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMenuOpen(false)}
-        >
-          <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
-            <View style={styles.menuPopup}>
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuName}>{displayName}</Text>
-                <Text style={styles.menuEmail}>{displayEmail}</Text>
-              </View>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  Alert.alert('Tài khoản', 'Tính năng cài đặt sẽ được bổ sung sau.');
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="settings" size={18} color="#6b7280" />
-                </View>
-                <Text style={styles.menuText}>Cài đặt tài khoản</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  onRequestLogout?.();
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="log-out" size={18} color="#ef4444" />
-                </View>
-                <Text style={styles.menuTextDanger}>Đăng xuất</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-      ) : null}
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onRequestLogout}
+      />
 
       <ScrollView contentContainerStyle={styles.container}>
         {step === 1 ? renderStepOneContent() : null}

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const FALLBACK_IMAGE =
@@ -69,7 +69,6 @@ export default function UserFavoritesScreen({
   const [mealSetLoadingMap, setMealSetLoadingMap] = useState({});
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const displayName = useMemo(() => user?.fullName || user?.name || 'Người dùng', [user]);
   const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
 
   const loadFavorites = useCallback(async () => {
@@ -192,49 +191,12 @@ export default function UserFavoritesScreen({
         onAccountPress={() => setMenuOpen((current) => !current)}
       />
 
-      {!isGuest ? (
-        <Modal
-          visible={menuOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMenuOpen(false)}
-        >
-          <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
-            <View style={styles.menuPopup}>
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuName}>{displayName}</Text>
-                <Text style={styles.menuEmail}>{displayEmail}</Text>
-              </View>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  Alert.alert('Tài khoản', 'Tính năng cài đặt sẽ được bổ sung sau.');
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="settings" size={18} color="#6b7280" />
-                </View>
-                <Text style={styles.menuText}>Cài đặt tài khoản</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  onRequestLogout?.();
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="log-out" size={18} color="#ef4444" />
-                </View>
-                <Text style={styles.menuTextDanger}>Đăng xuất</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-      ) : null}
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onRequestLogout}
+      />
 
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>

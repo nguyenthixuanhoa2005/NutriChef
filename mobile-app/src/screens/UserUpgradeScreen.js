@@ -248,7 +248,19 @@ export default function UserUpgradeScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader user={user} onUpgradePress={fetchProfile} isGuest={false} onAccountPress={onLogout} />
+      <AppHeader 
+        user={user} 
+        onUpgradePress={fetchProfile} 
+        isGuest={false} 
+        onAccountPress={() => setMenuOpen(true)} 
+      />
+
+      <AppAccountMenu 
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {user?.premium ? (

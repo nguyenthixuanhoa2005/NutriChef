@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppAccountMenu, AppBottomNav, AppHeader } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const REVIEW_FILTERS = [
@@ -174,7 +174,8 @@ export default function AdminRecipeReviewScreen({
   onNavigateIngredients,
   onNavigateUsers,
   onNavigateTransactions
-}) {  const [activeFilter, setActiveFilter] = useState('PENDING');
+}) {  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('PENDING');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
@@ -429,7 +430,14 @@ export default function AdminRecipeReviewScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
+      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen(true)} user={user} />
+
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
 
       {viewMode === 'catalog' ? (
         <View style={styles.topActions}>

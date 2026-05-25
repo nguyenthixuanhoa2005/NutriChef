@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const EMPTY_FORM = {
@@ -244,52 +244,15 @@ export default function RecipeSubmissionScreen({
         onLoginPress={onLoginPress}
         onSignupPress={onLoginPress}
         isGuest={isGuest}
-        onAccountPress={() => setMenuOpen((current) => !current)}
+        onAccountPress={() => setMenuOpen(true)}
       />
 
-      {!isGuest ? (
-        <Modal
-          visible={menuOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setMenuOpen(false)}
-        >
-          <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
-            <View style={styles.menuPopup}>
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuName}>{displayName}</Text>
-                <Text style={styles.menuEmail}>{displayEmail}</Text>
-              </View>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  Alert.alert('Tài khoản', 'Tính năng cài đặt sẽ được bổ sung sau.');
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="settings" size={18} color="#6b7280" />
-                </View>
-                <Text style={styles.menuText}>Cài đặt tài khoản</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.menuRow}
-                onPress={() => {
-                  setMenuOpen(false);
-                  onRequestLogout?.();
-                }}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Feather name="log-out" size={18} color="#ef4444" />
-                </View>
-                <Text style={styles.menuTextDanger}>Đăng xuất</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Modal>
-      ) : null}
+      <AppAccountMenu 
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onRequestLogout}
+      />
 
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.card}>
@@ -656,69 +619,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.65,
-  },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(17, 24, 39, 0.25)',
-    justifyContent: 'flex-start',
-  },
-  menuPopup: {
-    marginTop: 80,
-    marginRight: 14,
-    alignSelf: 'flex-end',
-    width: 260,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#111827',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 10,
-    overflow: 'hidden',
-  },
-  menuHeader: {
-    backgroundColor: '#fff7ed',
-    borderBottomWidth: 1,
-    borderBottomColor: '#fed7aa',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  menuName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  menuEmail: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  menuIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  menuTextDanger: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#ef4444',
   },
   emptyText: {
     color: '#6b7280',

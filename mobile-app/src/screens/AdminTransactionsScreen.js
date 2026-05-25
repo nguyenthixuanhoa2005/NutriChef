@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { AppHeader, AppBottomNav } from '../components/AppChrome';
+import { AppHeader, AppBottomNav, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const StatusBadge = ({ status }) => {
@@ -86,6 +86,7 @@ export default function AdminTransactionsScreen({
   onNavigateRecipeReview,
   onNavigateUsers,
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState('');
@@ -127,8 +128,15 @@ export default function AdminTransactionsScreen({
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={onLogout} user={user} />
+      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen(true)} user={user} />
       
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
+
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quản lý giao dịch</Text>

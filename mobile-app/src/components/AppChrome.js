@@ -70,7 +70,9 @@ export function AppHeader({
   user,
   onUpgradePress,
 }) {
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = 
+    user?.role?.toLowerCase() === 'admin' || 
+    user?.primaryRole?.toLowerCase() === 'admin';
   const premiumData = user?.premium;
   const isPremiumActive =
     premiumData && (!premiumData.expiryDate || new Date(premiumData.expiryDate) > new Date());
@@ -120,6 +122,62 @@ export function AppHeader({
   );
 }
 
+import { Modal } from 'react-native';
+
+export function AppAccountMenu({ 
+  visible, 
+  onClose, 
+  user, 
+  onLogout 
+}) {
+  const displayName = user?.fullName || user?.name || 'Người dùng';
+  const displayEmail = user?.email || 'user@nutrichef.app';
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.menuBackdrop} onPress={onClose}>
+        <View style={styles.menuPopup}>
+          <View style={styles.menuHeader}>
+            <Text style={styles.menuName}>{displayName}</Text>
+            <Text style={styles.menuEmail}>{displayEmail}</Text>
+          </View>
+
+          <Pressable
+            style={styles.menuRow}
+            onPress={() => {
+              onClose();
+              Alert.alert('Tài khoản', 'Tính năng cài đặt sẽ được bổ sung sau.');
+            }}
+          >
+            <View style={styles.menuIconWrap}>
+              <Feather name="settings" size={18} color="#6b7280" />
+            </View>
+            <Text style={styles.menuText}>Cài đặt tài khoản</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.menuRow}
+            onPress={() => {
+              onClose();
+              onLogout?.();
+            }}
+          >
+            <View style={styles.menuIconWrap}>
+              <Feather name="log-out" size={18} color="#ef4444" />
+            </View>
+            <Text style={styles.menuTextDanger}>Đăng xuất</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user', user, usageCount = 0 }) {
   const navItems = role === 'admin' ? ADMIN_NAV_ITEMS : USER_NAV_ITEMS;
   const isUserRole = role !== 'admin';
@@ -136,10 +194,12 @@ export function AppBottomNav({ activeKey = 'home', onTabPress, role = 'user', us
           const iconSize = 23;
           
           let showLimitCrown = false;
-          if (item.key === 'suggest') {
-            showLimitCrown = isLimitReached;
-          } else if (item.key === 'menu' || item.key === 'recipes') {
-            showLimitCrown = !isPremium;
+          if (role !== 'admin') {
+            if (item.key === 'suggest') {
+              showLimitCrown = isLimitReached;
+            } else if (item.key === 'menu' || item.key === 'recipes') {
+              showLimitCrown = !isPremium;
+            }
           }
 
           return (
@@ -360,5 +420,68 @@ const styles = StyleSheet.create({
   },
   navLabelActive: {
     color: '#f97316',
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.25)',
+    justifyContent: 'flex-start',
+  },
+  menuPopup: {
+    marginTop: 64,
+    marginRight: 14,
+    alignSelf: 'flex-end',
+    width: 260,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#111827',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  menuHeader: {
+    backgroundColor: '#fff7ed',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fed7aa',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  menuName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  menuEmail: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  menuIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  menuTextDanger: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ef4444',
   },
 });

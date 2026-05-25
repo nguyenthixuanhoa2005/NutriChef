@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { AppBottomNav, AppHeader } from '../components/AppChrome';
+import { AppAccountMenu, AppBottomNav, AppHeader } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -69,9 +69,6 @@ export default function AdminIngredientsScreen({ onLogout, user, onNavigateOverv
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const displayName = user?.fullName || 'Admin NutriChef';
-  const displayEmail = user?.email || 'admin@nutrichef.com';
 
   const filteredIngredients = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -274,36 +271,14 @@ export default function AdminIngredientsScreen({ onLogout, user, onNavigateOverv
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen((v) => !v)} user={user} />
+      <AppHeader isGuest={false} onAccountPress={() => setMenuOpen(true)} user={user} />
 
-      {menuOpen ? (
-        <View style={styles.menuPopup}>
-          <View style={styles.menuHeader}>
-            <Text style={styles.menuName}>{displayName}</Text>
-            <Text style={styles.menuEmail}>{displayEmail}</Text>
-          </View>
-
-          <Pressable style={styles.menuRow} onPress={() => setMenuOpen(false)}>
-            <View style={styles.menuIconWrap}>
-              <Feather name="settings" size={18} color="#6b7280" />
-            </View>
-            <Text style={styles.menuText}>Cài đặt tài khoản</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.menuRow}
-            onPress={() => {
-              setMenuOpen(false);
-              onLogout?.();
-            }}
-          >
-            <View style={styles.menuIconWrap}>
-              <Feather name="log-out" size={18} color="#ef4444" />
-            </View>
-            <Text style={styles.menuTextDanger}>Đăng xuất</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <AppAccountMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        user={user}
+        onLogout={onLogout}
+      />
 
       <View style={styles.content}>
         <View style={styles.searchWrap}>
@@ -573,66 +548,6 @@ const styles = StyleSheet.create({
       web: 0,
       default: 0,
     }),
-  },
-  menuPopup: {
-    position: 'absolute',
-    top: 52,
-    right: 12,
-    width: 250,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
-    shadowColor: '#111827',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-    elevation: 8,
-    zIndex: 30,
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  menuName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  menuEmail: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#6b7280',
-  },
-  menuRow: {
-    minHeight: 54,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  menuIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuText: {
-    fontSize: 15,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  menuTextDanger: {
-    fontSize: 15,
-    color: '#ef4444',
-    fontWeight: '600',
   },
   content: {
     flex: 1,

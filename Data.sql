@@ -247,6 +247,7 @@ VALUES
 ('Măng tươi', 'VEGETABLE', false, 'măng tươi'),
 ('Thì là', 'SPICE', true, 'thì là'),
 ('Tiêu', 'SPICE', true, 'hạt tiêu')
+('Cá', 'MEAT', true)  --id: 134
 ) AS v(name, type, is_common, keywords)
 WHERE NOT EXISTS (
 	SELECT 1
@@ -255,12 +256,14 @@ WHERE NOT EXISTS (
 );
 
 COMMIT;
-
+DELETE FROM ingredient
+WHERE name = 'Cá';
 --DELETE FROM ingredient WHERE ingredient_id = 44;
 select * from ingredient;
+select *from recipe;
 
 -- 7. RECIPE:-- cần bắt đkien trùng, chưa có id, tên món ch có trg list nguyên liệu
-INSERT INTO recipe (author_id, title, description, ingredients_json, steps_json, dish_type, cooking_time, difficulty, total_calories) VALUES 
+
 -- Món 1: ức gà luộc 
 (1, 'Ức gà', 'Món ức gà tươi ngon nhiều dinh dưỡng', 
 '[{"id": 1, "name": "Thịt gà ức", "qty": 500, "unit": "g"}, {"id": 23, "name": "Nước mắm", "qty": 30, "unit": "ml"}]'::JSONB,
@@ -509,7 +512,12 @@ INSERT INTO recipe (author_id, title, description, ingredients_json, steps_json,
 -- Món 50: Nước chanh sả gừng đường (Thức uống thanh lọc)
 (1, 'Nước thanh lọc chanh sả gừng', 'Thức uống tốt cho sức khỏe mỗi sáng', 
 '[{"id": 43, "name": "Chanh", "qty": 1, "unit": "quả"}, {"id": 31, "name": "Sả tươi", "qty": 2, "unit": "củ"}, {"id": 20, "name": "Gừng", "qty": 1, "unit": "củ"}, {"id": 22, "name": "Đường", "qty": 30, "unit": "g"}]'::JSONB,
-'[{"step": 1, "content": "Đun sôi sả và gừng với 500ml nước trong 10 phút"}, {"step": 2, "content": "Để nguội bớt rồi pha đường và vắt chanh"}, {"step": 3, "content": "Dùng nóng hoặc thêm đá đều ngon"}]'::JSONB, 'DRINK', 15, 'EASY', 120);
+'[{"step": 1, "content": "Đun sôi sả và gừng với 500ml nước trong 10 phút"}, {"step": 2, "content": "Để nguội bớt rồi pha đường và vắt chanh"}, {"step": 3, "content": "Dùng nóng hoặc thêm đá đều ngon"}]'::JSONB, 'DRINK', 15, 'EASY', 120),
+--Món id 56: Cá kho gừng
+(1, 'Cá kho gừng', 'Món cá kho mang nhiều dinh dưỡng cho ngày mới', 
+'[{"id": 20, "name": "Gừng", "qty": 3, "unit": "g"}, {"id": 134, "name": "Cá", "qty": 1, "unit": "con"}, {"id": 23, "name": "Nước mắm", "qty": 30, "unit": "ml"}]'::JSONB,
+'[{"step": 1, "content": "Làm sạch cá qua nước"}, {"step": 2, "content": "Sơ chế bằng dao mổ"}, {"step": 3, "content": "Rửa sạch lại với nước" }, {"step": 4, "content": "Cho cá vào đun kèm với mắm và gừng"}, {"step": 5, "content": "Đun lửa nhỏ 20 phút"}]'::JSONB, 'MAIN_DISH', 40, 'EASY', 350);
+
 
 select * from recipe;
 select * from ingredient;

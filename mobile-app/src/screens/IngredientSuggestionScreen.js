@@ -26,6 +26,7 @@ import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome
 import { API_BASE_URL, authRequest, request } from '../services/client';
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
 
 const FONT_REGULAR = Platform.select({
   ios: 'AvenirNext-Regular',
@@ -230,6 +231,7 @@ export default function IngredientSuggestionScreen({
   // Shopping list and expanded logic
   const [expandedRecipeId, setExpandedRecipeId] = useState(() => cachedSuggestionState?.expandedRecipeId || null);
   const [localIngredientStatus, setLocalIngredientStatus] = useState(() => cachedSuggestionState?.localIngredientStatus || {}); // { [recipeId]: { [ingName]: boolean } }
+  const [shoppingList, setShoppingList] = useState([]); // Persistent shopping list for sync
 
   // Persist state to cache
   useEffect(() => {
@@ -255,6 +257,41 @@ export default function IngredientSuggestionScreen({
     expandedRecipeId,
     localIngredientStatus,
   ]);
+
+  const loadPrepStatus = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      if (saved) {
+        setLocalIngredientStatus(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load prep status', e);
+    }
+  }, []);
+
+  const savePrepStatus = async (newStatus) => {
+    try {
+      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(newStatus));
+    } catch (e) {
+      console.error('Failed to save prep status', e);
+    }
+  };
+
+  const loadShoppingListForSync = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      if (saved) {
+        setShoppingList(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load shopping list for sync', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPrepStatus();
+    loadShoppingListForSync();
+  }, [loadPrepStatus, loadShoppingListForSync]);
 
   const MAX_FREE_USAGE = 3;
   const isPremium = user?.premium && (!user.premium.expiryDate || new Date(user.premium.expiryDate) > new Date());
@@ -842,13 +879,15 @@ export default function IngredientSuggestionScreen({
       const recipeStatus = prev[recipeId] || {};
       const isChecked = recipeStatus[ingName] || false;
       
-      return {
+      const newStatus = {
         ...prev,
         [recipeId]: {
           ...recipeStatus,
           [ingName]: !isChecked,
         },
       };
+      savePrepStatus(newStatus);
+      return newStatus;
     });
   };
 
@@ -861,8 +900,8 @@ export default function IngredientSuggestionScreen({
     
     // Sort: checked items at bottom
     const sorted = [...rawIngredients].sort((a, b) => {
-      const aChecked = statusMap[a.name] || false;
-      const bChecked = statusMap[b.name] || false;
+      const aChecked = statusMap[a.name] || shoppingList.some(c => c.name.toLowerCase() === a.name.toLowerCase() && c.checked);
+      const bChecked = statusMap[b.name] || shoppingList.some(c => c.name.toLowerCase() === b.name.toLowerCase() && c.checked);
       if (aChecked === bChecked) return 0;
       return aChecked ? 1 : -1;
     });
@@ -871,7 +910,12 @@ export default function IngredientSuggestionScreen({
       <View style={styles.expandedIngredients}>
         <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
         {sorted.map((ing, idx) => {
-          const isChecked = statusMap[ing.name] || false;
+          const isBought = shoppingList.some(cartItem => 
+            cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
+            cartItem.checked
+          );
+          const isChecked = statusMap[ing.name] || isBought;
+          
           return (
             <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
               <Pressable 

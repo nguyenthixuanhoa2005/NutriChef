@@ -18,6 +18,7 @@ import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome
 import { authRequest, request } from '../services/client';
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
@@ -176,12 +177,26 @@ export default function UserFavoritesScreen({
     }
   }, [isGuest]);
 
-  useEffect(() => {
-    loadFavorites();
-    loadShoppingListForSync();
-  }, [loadFavorites]);
+  const loadPrepStatus = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      if (saved) {
+        setLocalIngredientStatus(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load prep status', e);
+    }
+  }, []);
 
-  const loadShoppingListForSync = async () => {
+  const savePrepStatus = async (newStatus) => {
+    try {
+      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(newStatus));
+    } catch (e) {
+      console.error('Failed to save prep status', e);
+    }
+  };
+
+  const loadShoppingListForSync = useCallback(async () => {
     try {
       const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
       if (saved) {
@@ -190,7 +205,13 @@ export default function UserFavoritesScreen({
     } catch (e) {
       console.error('Failed to load shopping list for sync', e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadFavorites();
+    loadShoppingListForSync();
+    loadPrepStatus();
+  }, [loadFavorites, loadShoppingListForSync, loadPrepStatus]);
 
   const recipeCountText = useMemo(() => {
     return `${favoriteRecipes.length} công thức`;
@@ -237,13 +258,15 @@ export default function UserFavoritesScreen({
       const recipeStatus = prev[recipeId] || {};
       const isChecked = recipeStatus[ingName] || false;
       
-      return {
+      const newStatus = {
         ...prev,
         [recipeId]: {
           ...recipeStatus,
           [ingName]: !isChecked,
         },
       };
+      savePrepStatus(newStatus);
+      return newStatus;
     });
   };
 

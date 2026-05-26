@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome
 import { authRequest, request } from '../services/client';
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
 
 const MEAL_TIME_OPTIONS = [
   { key: 'breakfast', label: 'Bữa sáng', icon: 'weather-sunset-up' },
@@ -372,6 +373,36 @@ export default function UserMealSetScreen({
   const [fetchingRecipeId, setFetchingRecipeId] = useState(null);
   const [shoppingList, setShoppingList] = useState([]); // Persistent shopping list for sync
 
+  const loadPrepStatus = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      if (saved) {
+        setLocalIngredientStatus(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load prep status in meal set', e);
+    }
+  }, []);
+
+  const savePrepStatus = async (newStatus) => {
+    try {
+      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(newStatus));
+    } catch (e) {
+      console.error('Failed to save prep status in meal set', e);
+    }
+  };
+
+  const loadShoppingListForSync = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      if (saved) {
+        setShoppingList(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load shopping list for sync', e);
+    }
+  }, []);
+
   const totalNutrition = useMemo(() => sumNutrition(mealItems), [mealItems]);
 
   const fetchRecipeDetailIfMissing = async (recipe) => {
@@ -501,22 +532,12 @@ export default function UserMealSetScreen({
 
     fetchPool();
     loadShoppingListForSync();
+    loadPrepStatus();
 
     return () => {
       mounted = false;
     };
-  }, []);
-
-  const loadShoppingListForSync = async () => {
-    try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
-      if (saved) {
-        setShoppingList(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error('Failed to load shopping list for sync', e);
-    }
-  };
+  }, [loadPrepStatus, loadShoppingListForSync]);
 
   useEffect(() => {
     setTargetCalories((current) => clampToRange(current, CALORIE_MIN, CALORIE_MAX));
@@ -738,13 +759,15 @@ export default function UserMealSetScreen({
       const recipeStatus = prev[recipeId] || {};
       const isChecked = recipeStatus[ingName] || false;
       
-      return {
+      const newStatus = {
         ...prev,
         [recipeId]: {
           ...recipeStatus,
           [ingName]: !isChecked,
         },
       };
+      savePrepStatus(newStatus);
+      return newStatus;
     });
   };
 
@@ -929,7 +952,7 @@ export default function UserMealSetScreen({
         user={user}
         onUpgradePress={onNavigateUpgrade}
         onLoginPress={onLoginPress}
-        onSignupPress={onLoginPress}
+        onSignupPress={onSignupPress}
         isGuest={isGuest}
         onAccountPress={handleAccountPress}
       />

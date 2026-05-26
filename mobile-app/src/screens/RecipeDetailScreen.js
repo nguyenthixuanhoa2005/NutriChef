@@ -19,6 +19,7 @@ import { authRequest, request } from '../services/client';
 import { AppBottomNav } from '../components/AppChrome';
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
 
 const FALLBACK_RECIPE_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
@@ -153,12 +154,30 @@ export default function RecipeDetailScreen({
     }
   }, [isGuest, recipeId]);
 
-  useEffect(() => {
-    fetchRecipeDetail();
-    loadShoppingListForSync();
-  }, [fetchRecipeDetail]);
+  const loadPrepStatus = useCallback(async () => {
+    try {
+      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      if (saved) {
+        const fullStatus = JSON.parse(saved);
+        setLocalIngredientStatus(fullStatus[recipeId] || {});
+      }
+    } catch (e) {
+      console.error('Failed to load prep status', e);
+    }
+  }, [recipeId]);
 
-  const loadShoppingListForSync = async () => {
+  const savePrepStatus = async (newStatus) => {
+    try {
+      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      const fullStatus = saved ? JSON.parse(saved) : {};
+      fullStatus[recipeId] = newStatus;
+      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(fullStatus));
+    } catch (e) {
+      console.error('Failed to save prep status', e);
+    }
+  };
+
+  const loadShoppingListForSync = useCallback(async () => {
     try {
       const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
       if (saved) {
@@ -167,7 +186,13 @@ export default function RecipeDetailScreen({
     } catch (e) {
       console.error('Failed to load shopping list for sync', e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchRecipeDetail();
+    loadShoppingListForSync();
+    loadPrepStatus();
+  }, [fetchRecipeDetail, loadShoppingListForSync, loadPrepStatus]);
 
   const ingredients = useMemo(() => safeArray(recipe?.ingredients_json), [recipe]);
   const steps = useMemo(() => safeArray(recipe?.steps_json), [recipe]);
@@ -303,10 +328,14 @@ export default function RecipeDetailScreen({
   };
 
   const toggleLocalIngredient = (ingName) => {
-    setLocalIngredientStatus((prev) => ({
-      ...prev,
-      [ingName]: !prev[ingName],
-    }));
+    setLocalIngredientStatus((prev) => {
+      const newStatus = {
+        ...prev,
+        [ingName]: !prev[ingName],
+      };
+      savePrepStatus(newStatus);
+      return newStatus;
+    });
   };
 
   const renderRecipeIngredients = () => {

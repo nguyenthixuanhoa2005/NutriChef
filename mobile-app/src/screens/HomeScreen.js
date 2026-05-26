@@ -31,11 +31,30 @@ const normalizeSearchText = (value) =>
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value) || 0);
 
+const getDishTypeLabel = (type) => {
+  if (!type) return 'Món ăn';
+  const normalized = String(type).trim().toUpperCase();
+  if (normalized === 'MAIN_DISH') return 'Món chính';
+  if (normalized === 'SIDE_DISH' || normalized === 'SOUP' || normalized === 'APPETIZER') return 'Món phụ';
+  if (normalized === 'DESSERT') return 'Tráng miệng';
+  return 'Công thức';
+};
+
+const getDifficultyLabel = (diff) => {
+  if (!diff) return '';
+  const normalized = String(diff).trim().toUpperCase();
+  if (normalized === 'EASY') return 'Dễ';
+  if (normalized === 'MEDIUM') return 'Trung bình';
+  if (normalized === 'HARD') return 'Khó';
+  return '';
+};
+
 const mapRecipeRow = (row, isGuest) => ({
   id: row.recipe_id,
   title: row.title,
   author: row.author_name || 'NutriChef',
   timeLabel: `${Number(row.cooking_time) || 0} phút`,
+  cookingTime: row.cooking_time,
   views: formatNumber(row.rating_count),
   likes: formatNumber(row.like_count),
   likeCount: Number(row.like_count) || 0,
@@ -45,7 +64,9 @@ const mapRecipeRow = (row, isGuest) => ({
   premium: Boolean(isGuest),
   image: row.image_url || FALLBACK_RECIPE_IMAGE,
   isFavorite: false,
-  dishType: row.dish_type, // Thêm dishType để lọc
+  dishType: row.dish_type,
+  difficulty: row.difficulty,
+  totalCalories: row.total_calories,
 });
 
 const RecipeCard = ({
@@ -65,6 +86,8 @@ const RecipeCard = ({
 
     return true;
   };
+
+  const difficultyText = getDifficultyLabel(recipe.difficulty);
 
   return (
     <Pressable 
@@ -115,27 +138,26 @@ const RecipeCard = ({
       {/* Bottom Info Overlay */}
       <View style={styles.premiumOverlay}>
         <View style={styles.premiumTextContent}>
+          <View style={styles.cardTagsRow}>
+            {difficultyText ? (
+              <View style={[styles.cardTag, styles.difficultyTag]}>
+                <Text style={styles.cardTagText}>{difficultyText}</Text>
+              </View>
+            ) : null}
+            <View style={[styles.cardTag, styles.timeTag]}>
+              <Text style={styles.cardTagText}>{recipe.timeLabel}</Text>
+            </View>
+          </View>
           <Text style={styles.premiumTitle} numberOfLines={1}>{recipe.title}</Text>
           <View style={styles.premiumAuthorRow}>
             <MaterialCommunityIcons name="account-circle-outline" size={14} color="rgba(255,255,255,0.8)" />
             <Text style={styles.premiumAuthorText}>{recipe.author}</Text>
           </View>
         </View>
-        <View style={styles.premiumTimeBadge}>
-          <Feather name="clock" size={12} color="#fff" />
-          <Text style={styles.premiumTimeText}>{recipe.timeLabel}</Text>
-        </View>
       </View>
     </Pressable>
   );
 };
-
-const CATEGORIES = [
-  { id: 'all', label: 'Tất cả', icon: 'food-variant' },
-  { id: 'main', label: 'Món chính', icon: 'food-drumstick' },
-  { id: 'side', label: 'Món phụ', icon: 'food-apple' },
-  { id: 'dessert', label: 'Tráng miệng', icon: 'ice-cream' },
-];
 
 export default function HomeScreen({
   onLoginPress,
@@ -157,16 +179,12 @@ export default function HomeScreen({
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
   const [favoritePendingId, setFavoritePendingId] = useState(null);
-  const [activeCategory, setActiveCategory] = useState('all');
 
   const fetchTrendingRecipes = useCallback(async () => {
     try {
       setLoadingRecipes(true);
       
       let apiUrl = '/api/recipes/trending?limit=20';
-      if (activeCategory === 'main') apiUrl += '&dishType=MAIN_DISH';
-      else if (activeCategory === 'side') apiUrl += '&dishType=SIDE_DISH';
-      else if (activeCategory === 'dessert') apiUrl += '&dishType=DESSERT';
 
       const data = await request(apiUrl);
       const rows = Array.isArray(data?.recipes) ? data.recipes : [];
@@ -205,7 +223,7 @@ export default function HomeScreen({
     } finally {
       setLoadingRecipes(false);
     }
-  }, [isGuest, activeCategory]);
+  }, [isGuest]);
 
   useEffect(() => {
     fetchTrendingRecipes();
@@ -391,34 +409,8 @@ export default function HomeScreen({
               )}
             </View>
 
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              contentContainerStyle={styles.categoriesScroll}
-            >
-              {CATEGORIES.map(cat => (
-                <Pressable 
-                  key={cat.id} 
-                  onPress={() => setActiveCategory(cat.id)}
-                  style={[styles.categoryBtn, activeCategory === cat.id && styles.categoryBtnActive]}
-                >
-                  <MaterialCommunityIcons 
-                    name={cat.icon} 
-                    size={18} 
-                    color={activeCategory === cat.id ? '#fff' : '#64748b'} 
-                  />
-                  <Text style={[styles.categoryLabel, activeCategory === cat.id && styles.categoryLabelActive]}>
-                    {cat.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Gợi ý cho bạn</Text>
-              <Pressable>
-                <Text style={styles.seeAllText}>Xem tất cả</Text>
-              </Pressable>
             </View>
           </View>
         )}
@@ -528,33 +520,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1e293b',
   },
-  categoriesScroll: {
-    paddingBottom: 24,
-    gap: 12,
-  },
-  categoryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  categoryBtnActive: {
-    backgroundColor: '#1e293b',
-    borderColor: '#1e293b',
-  },
-  categoryLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  categoryLabelActive: {
-    color: '#fff',
-  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -655,6 +620,39 @@ const styles = StyleSheet.create({
   premiumTextContent: {
     flex: 1,
     gap: 4,
+  },
+  cardTagsRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    height: 22,
+  },
+  cardTagsContent: {
+    gap: 6,
+    paddingRight: 10,
+  },
+  cardTag: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+  },
+  difficultyTag: {
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  timeTag: {
+    backgroundColor: 'rgba(59, 130, 246, 0.4)', // Blue-ish
+  },
+  calorieTag: {
+    backgroundColor: 'rgba(16, 185, 129, 0.4)', // Green-ish
+  },
+  cardTagText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   premiumTitle: {
     fontSize: 17,

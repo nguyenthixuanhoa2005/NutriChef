@@ -151,6 +151,7 @@ export default function HomeScreen({
   onNavigateRecipeSubmission,
   onNavigateFavorites,
   onNavigateUpgrade,
+  onNavigateShopping,
   onOpenRecipeDetail,
   isGuest,
   user,
@@ -254,6 +255,11 @@ export default function HomeScreen({
 
     if (tabKey === 'upgrade') {
       onNavigateUpgrade?.();
+      return;
+    }
+
+    if (tabKey === 'shopping') {
+      onNavigateShopping?.();
       return;
     }
 

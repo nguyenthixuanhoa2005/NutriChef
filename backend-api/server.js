@@ -727,6 +727,7 @@ app.get('/api/recipes/trending', async (req, res) => {
                 r.image_url,
                 r.total_calories,
                 r.cooking_time,
+                r.dish_type,
                 r.difficulty,
                 COALESCE(u.full_name, 'NutriChef') AS author_name,
                 COALESCE(ROUND(AVG(rt.score)::numeric, 1), 0) AS avg_rating,
@@ -736,8 +737,13 @@ app.get('/api/recipes/trending', async (req, res) => {
              LEFT JOIN app_user u ON u.user_id = r.author_id
              LEFT JOIN rating rt ON rt.recipe_id = r.recipe_id
              LEFT JOIN favorite_recipe fr ON fr.recipe_id = r.recipe_id
+             WHERE r.status = 'APPROVED'
              GROUP BY r.recipe_id, u.full_name
-             ORDER BY avg_rating DESC, like_count DESC, r.recipe_id DESC
+             ORDER BY 
+                (CASE WHEN r.created_at >= NOW() - INTERVAL '48 hours' THEN 1 ELSE 0 END) DESC,
+                avg_rating DESC, 
+                like_count DESC, 
+                r.recipe_id DESC
              LIMIT $1`,
             [limit]
         );
@@ -763,6 +769,7 @@ app.get('/api/recipes/favorites', authenticateAccessToken, async (req, res) => {
                 r.total_calories,
                 r.cooking_time,
                 r.difficulty,
+                r.ingredients_json,
                 COALESCE(u.full_name, 'NutriChef') AS author_name,
                 COALESCE(ROUND(AVG(rt.score)::numeric, 1), 0) AS avg_rating,
                 COUNT(DISTINCT rt.rating_id) AS rating_count,
@@ -1567,7 +1574,8 @@ app.get('/api/meal-sets/:id/recipes', authenticateAccessToken, async (req, res) 
                 r.image_url,
                 r.total_calories,
                 r.cooking_time,
-                r.difficulty
+                r.difficulty,
+                r.ingredients_json
              FROM meal_set_recipe msr
              JOIN recipe r ON r.recipe_id = msr.recipe_id
              WHERE msr.meal_set_id = $1

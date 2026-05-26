@@ -51,7 +51,36 @@ const toIngredientArray = (value) =>
     .split(/\n+/)
     .map((line) => String(line || '').trim())
     .filter(Boolean)
-    .map((name) => ({ name }));
+    .map((line) => {
+      // Regex pattern: "Name (Qty Unit)"
+      // Matches "Ingredient Name (100 g)" or "Ingredient (2)"
+      const bracketRegex = /^(.*?)\s*\((.*?)\)$/;
+      const match = line.match(bracketRegex);
+
+      if (match) {
+        const name = match[1].trim();
+        const detail = match[2].trim();
+
+        // Try to separate number and unit from the content inside brackets
+        // e.g., "100g" -> 100 and "g"
+        const unitRegex = /^(\d+(?:\.\d+)?)\s*(.*)$/;
+        const unitMatch = detail.match(unitRegex);
+
+        if (unitMatch) {
+          return {
+            name,
+            qty: Number(unitMatch[1]),
+            unit: unitMatch[2].trim() || null,
+          };
+        }
+
+        // If no number found, treat whole bracket content as unit/detail
+        return { name, qty: null, unit: detail };
+      }
+
+      // No brackets found, just use the whole line as name
+      return { name: line, qty: null, unit: null };
+    });
 
 const toStepsArray = (value) =>
   String(value || '')
@@ -115,6 +144,7 @@ export default function RecipeSubmissionScreen({
   onNavigateMeal,
   onNavigateFavorites,
   onNavigateUpgrade,
+  onNavigateShopping,
   onRequestLogout,
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -450,6 +480,11 @@ export default function RecipeSubmissionScreen({
 
             if (tabKey === 'upgrade') {
               onNavigateUpgrade?.();
+              return;
+            }
+
+            if (tabKey === 'shopping') {
+              onNavigateShopping?.();
               return;
             }
           }}

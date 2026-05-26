@@ -167,7 +167,7 @@ const findBestCombo = (entries, pickCount, targetTotalCalories) => {
   return bestEntries;
 };
 
-const buildMealItems = ({ recipes, targetCalories, mealTime }) => {
+const buildMealItems = ({ recipes, targetCalories, mealTime, mealGoal }) => {
   const uniqueRecipes = dedupeRecipes(recipes);
   if (uniqueRecipes.length === 0) {
     return [];
@@ -176,68 +176,93 @@ const buildMealItems = ({ recipes, targetCalories, mealTime }) => {
   const pickCount = getDishCountForMealTime(mealTime);
   const targetTotal = Math.max(0, Number(targetCalories) || 0);
   const perDishCalories = Math.max(60, Math.round(targetTotal / pickCount));
-  const scored = uniqueRecipes.map((recipe, idx) => {
-    const recipeCalories = toDbCalories(recipe?.total_calories);
-    return {
-      id: `${recipe.recipe_id}-${idx}`,
-      recipe,
-      calories: recipeCalories ?? perDishCalories,
-      scoreToDishTarget: Math.abs((recipeCalories ?? perDishCalories) - perDishCalories),
-    };
-  });
 
-  const sortedByDishTarget = [...scored].sort(
-    (left, right) => left.scoreToDishTarget - right.scoreToDishTarget
-  );
+  // Define templates based on Goal and MealTime
+  const MEAL_STRUCTURES = {
+    breakfast: {
+      lose: ['DESSERT', 'OTHER', 'SIDE_DISH'],
+      maintain: ['SIDE_DISH', 'DESSERT', 'OTHER'],
+      gain: ['SIDE_DISH', 'MAIN_DISH', 'OTHER'],
+    },
+    lunch: {
+      lose: ['SIDE_DISH', 'DESSERT', 'OTHER', 'MAIN_DISH', 'SIDE_DISH'],
+      maintain: ['MAIN_DISH', 'DESSERT', 'SIDE_DISH', 'OTHER', 'MAIN_DISH'],
+      gain: ['MAIN_DISH', 'SIDE_DISH', 'OTHER', 'MAIN_DISH', 'SIDE_DISH'],
+    },
+    dinner: {
+      lose: ['SIDE_DISH', 'OTHER', 'DESSERT', 'SIDE_DISH', 'OTHER'],
+      maintain: ['MAIN_DISH', 'SIDE_DISH', 'OTHER', 'DESSERT', 'SIDE_DISH'],
+      gain: ['MAIN_DISH', 'MAIN_DISH', 'SIDE_DISH', 'OTHER', 'DESSERT'],
+    },
+  };
 
-  const comboPool = sortedByDishTarget.slice(0, Math.min(20, sortedByDishTarget.length));
-  const bestCombo = comboPool.length >= pickCount
-    ? findBestCombo(comboPool, pickCount, targetTotal)
-    : null;
-
-  let chosenEntries = bestCombo;
-
-  if (!chosenEntries || chosenEntries.length < pickCount) {
-    const fallbackEntries = [];
-    for (let index = 0; index < pickCount; index += 1) {
-      fallbackEntries.push(sortedByDishTarget[index % sortedByDishTarget.length]);
-    }
-    chosenEntries = fallbackEntries;
-  }
-
+  const currentTemplate = MEAL_STRUCTURES[mealTime]?.[mealGoal] || ['MAIN_DISH', 'SIDE_DISH', 'OTHER'];
+  const usedIds = new Set();
   const picked = [];
-  chosenEntries.forEach((entry, index) => {
-    if (!entry?.recipe) {
-      return;
+
+  const getBestForCategory = (preferredType, target) => {
+    const getPool = (type) => {
+      if (type === 'OTHER') {
+        return uniqueRecipes.filter(
+          (r) => !['MAIN_DISH', 'SIDE_DISH', 'DESSERT'].includes(r.dish_type) && !usedIds.has(r.recipe_id)
+        );
+      }
+      return uniqueRecipes.filter((r) => r.dish_type === type && !usedIds.has(r.recipe_id));
+    };
+
+    let pool = getPool(preferredType);
+
+    // Smarter Fallback: If preferred category is empty, try similar/lighter ones first
+    if (pool.length === 0) {
+      const fallbackOrder = {
+        DESSERT: ['SIDE_DISH', 'OTHER'],
+        SIDE_DISH: ['OTHER', 'DESSERT'],
+        OTHER: ['SIDE_DISH', 'DESSERT'],
+        MAIN_DISH: ['SIDE_DISH', 'OTHER'],
+      };
+
+      const fallbacks = fallbackOrder[preferredType] || [];
+      for (const fType of fallbacks) {
+        pool = getPool(fType);
+        if (pool.length > 0) break;
+      }
     }
 
-    const recipe = entry.recipe;
-    const calories = entry.calories;
-    const macros = buildMacroFromCalories(calories);
-    picked.push({
-      key: `${recipe.recipe_id}-${index}`,
-      slotLabel: MEAL_SLOT_LABELS[index] || `Món ${index + 1}`,
-      recipe,
-      calories,
-      protein: macros.protein,
-      carbs: macros.carbs,
-      fat: macros.fat,
-    });
-  });
+    // Final fallback to any unused recipe
+    if (pool.length === 0) {
+      pool = uniqueRecipes.filter((r) => !usedIds.has(r.recipe_id));
+    }
+    // Absolute final fallback (allow duplicates if pool exhausted)
+    if (pool.length === 0) pool = uniqueRecipes;
 
-  if (picked.length < pickCount) {
-    for (let index = picked.length; index < pickCount; index += 1) {
-      const entry = sortedByDishTarget[index % sortedByDishTarget.length];
-      if (!entry?.recipe) {
-        continue;
-      }
+    return [...pool].sort((a, b) => {
+      const diffA = Math.abs((toDbCalories(a.total_calories) || target) - target);
+      const diffB = Math.abs((toDbCalories(b.total_calories) || target) - target);
+      return diffA - diffB;
+    })[0];
+  };
 
-      const recipe = entry.recipe;
-      const calories = entry.calories;
+  const getLabel = (type) => {
+    switch (type) {
+      case 'MAIN_DISH': return 'Món chính';
+      case 'SIDE_DISH': return 'Món phụ';
+      case 'DESSERT': return 'Tráng miệng';
+      default: return 'Món khác';
+    }
+  };
+
+  for (let i = 0; i < pickCount; i += 1) {
+    const targetType = currentTemplate[i % currentTemplate.length];
+
+    const recipe = getBestForCategory(targetType, perDishCalories);
+    if (recipe) {
+      usedIds.add(recipe.recipe_id);
+      const calories = toDbCalories(recipe.total_calories) || perDishCalories;
       const macros = buildMacroFromCalories(calories);
+      
       picked.push({
-        key: `${recipe.recipe_id}-${index}-fallback`,
-        slotLabel: MEAL_SLOT_LABELS[index] || `Món ${index + 1}`,
+        key: `${recipe.recipe_id}-${i}-${Date.now()}`,
+        slotLabel: getLabel(recipe.dish_type),
         recipe,
         calories,
         protein: macros.protein,
@@ -247,7 +272,7 @@ const buildMealItems = ({ recipes, targetCalories, mealTime }) => {
     }
   }
 
-  return picked.slice(0, pickCount);
+  return picked;
 };
 
 const parseIngredientCount = (ingredientsJson) =>
@@ -281,6 +306,19 @@ const goalLabelByKey = (goalKey) => {
 
   return 'Duy trì';
 };
+
+const getDishTypeBadgeInfo = (type) => {
+  switch (type) {
+    case 'MAIN_DISH':
+      return { label: 'Món chính', color: '#f97316' };
+    case 'SIDE_DISH':
+      return { label: 'Món phụ', color: '#10b981' };
+    case 'DESSERT':
+      return { label: 'Tráng miệng', color: '#ec4899' };
+    default:
+      return { label: 'Khác', color: '#6b7280' };
+  }
+};
 export default function UserMealSetScreen({
   isGuest = false,
   user,
@@ -294,6 +332,7 @@ export default function UserMealSetScreen({
   onNavigateRecipeSubmission,
   onNavigateFavorites,
   onNavigateUpgrade,
+  onNavigateShopping,
   onOpenRecipeDetail,
 }) {
   const [mealTime, setMealTime] = useState(() => cachedMealScreenState?.mealTime || 'lunch');
@@ -314,6 +353,11 @@ export default function UserMealSetScreen({
   const saveToastTimerRef = useRef(null);
 
   const totalNutrition = useMemo(() => sumNutrition(mealItems), [mealItems]);
+
+  const selectedGoalMeta = useMemo(
+    () => GOAL_OPTIONS.find((g) => g.key === mealGoal) || GOAL_OPTIONS[1],
+    [mealGoal]
+  );
 
   const handleCaloriesChange = (value) => {
     const nextCalories = clampToRange(Number(value) || CALORIE_MIN, CALORIE_MIN, CALORIE_MAX);
@@ -378,7 +422,7 @@ export default function UserMealSetScreen({
         if (!cachedMealScreenState?.recipePool?.length) {
           setLoadingPool(true);
         }
-        const data = await request('/api/recipes/trending?limit=30');
+        const data = await request('/api/recipes/trending?limit=50');
         if (!mounted) {
           return;
         }
@@ -415,7 +459,12 @@ export default function UserMealSetScreen({
 
   const handleGenerateMeal = async () => {
     const validTarget = clampToRange(targetCalories, CALORIE_MIN, CALORIE_MAX);
-    const built = buildMealItems({ recipes: recipePool, targetCalories: validTarget, mealTime });
+    const built = buildMealItems({
+      recipes: recipePool,
+      targetCalories: validTarget,
+      mealTime,
+      mealGoal,
+    });
 
     if (built.length === 0) {
       Alert.alert('Không có dữ liệu', 'Hiện chưa đủ món để tạo mâm cơm.');
@@ -691,6 +740,11 @@ export default function UserMealSetScreen({
       onNavigateUpgrade?.();
       return;
     }
+
+    if (tabKey === 'shopping') {
+      onNavigateShopping?.();
+      return;
+    }
   };
 
   const handleAccountPress = () => {
@@ -833,47 +887,55 @@ export default function UserMealSetScreen({
             </View>
 
             <View style={styles.menuList}>
-              {mealItems.map((item, index) => (
-                <View key={item.key} style={styles.menuItemCard}>
-                  <Image source={{ uri: resolveRecipeImage(item.recipe?.image_url) }} style={styles.menuItemImage} />
-                  <View style={styles.menuItemBody}>
-                    <Text style={styles.menuItemTitle}>{item.recipe?.title || item.slotLabel}</Text>
-                    <Text style={styles.menuItemSub}>{item.slotLabel}</Text>
-                    <Text style={styles.menuItemMeta}>
-                      {item.recipe?.difficulty || '--'} • {item.recipe?.cooking_time || '--'} phút • {item.ingredientCount || 0} nguyên liệu
-                    </Text>
-                    {item.recipe?.description ? (
-                      <Text numberOfLines={2} style={styles.menuItemDescription}>{item.recipe.description}</Text>
-                    ) : null}
-                    <Pressable style={styles.swapButton} onPress={() => handleSwapMealItem(index)}>
-                      <MaterialCommunityIcons name="swap-horizontal" size={16} color="#f97316" />
-                      <Text style={styles.swapButtonText}>Đổi món này</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.menuSideMeta}>
-                    <View style={styles.calorieChip}>
-                      <Text style={styles.calorieChipText}>{toDbCalories(item.calories) ?? '--'} kcal</Text>
+              {mealItems.map((item, index) => {
+                const badge = getDishTypeBadgeInfo(item.recipe?.dish_type);
+                return (
+                  <View key={item.key} style={styles.menuItemCard}>
+                    <View style={styles.imageContainer}>
+                      <Image source={{ uri: resolveRecipeImage(item.recipe?.image_url) }} style={styles.menuItemImage} />
+                      <View style={[styles.dishTypeBadge, { backgroundColor: badge.color }]}>
+                        <Text style={styles.dishTypeBadgeText}>{badge.label}</Text>
+                      </View>
                     </View>
-                    <Pressable
-                      onPress={() => handleToggleRecipeFavorite(item.recipe?.recipe_id)}
-                      disabled={favoritePendingId === Number(item.recipe?.recipe_id)}
-                    >
-                      {favoritePendingId === Number(item.recipe?.recipe_id) ? (
-                        <ActivityIndicator size="small" color="#ef4444" />
-                      ) : (
-                        <Feather
-                          name="heart"
-                          size={18}
-                          color={favoriteRecipeMap[Number(item.recipe?.recipe_id)] ? '#ef4444' : '#9ca3af'}
-                        />
-                      )}
-                    </Pressable>
-                    <Pressable onPress={() => onOpenRecipeDetail?.(item.recipe?.recipe_id)}>
-                      <Feather name="eye" size={18} color="#60a5fa" />
-                    </Pressable>
+                    <View style={styles.menuItemBody}>
+                      <Text style={styles.menuItemTitle}>{item.recipe?.title || item.slotLabel}</Text>
+                      <Text style={styles.menuItemSub}>{item.slotLabel}</Text>
+                      <Text style={styles.menuItemMeta}>
+                        {item.recipe?.difficulty || '--'} • {item.recipe?.cooking_time || '--'} phút • {item.ingredientCount || 0} nguyên liệu
+                      </Text>
+                      {item.recipe?.description ? (
+                        <Text numberOfLines={2} style={styles.menuItemDescription}>{item.recipe.description}</Text>
+                      ) : null}
+                      <Pressable style={styles.swapButton} onPress={() => handleSwapMealItem(index)}>
+                        <MaterialCommunityIcons name="swap-horizontal" size={16} color="#f97316" />
+                        <Text style={styles.swapButtonText}>Đổi món này</Text>
+                      </Pressable>
+                    </View>
+                    <View style={styles.menuSideMeta}>
+                      <View style={styles.calorieChip}>
+                        <Text style={styles.calorieChipText}>{toDbCalories(item.calories) ?? '--'} kcal</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => handleToggleRecipeFavorite(item.recipe?.recipe_id)}
+                        disabled={favoritePendingId === Number(item.recipe?.recipe_id)}
+                      >
+                        {favoritePendingId === Number(item.recipe?.recipe_id) ? (
+                          <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                          <Feather
+                            name="heart"
+                            size={18}
+                            color={favoriteRecipeMap[Number(item.recipe?.recipe_id)] ? '#ef4444' : '#9ca3af'}
+                          />
+                        )}
+                      </Pressable>
+                      <Pressable onPress={() => onOpenRecipeDetail?.(item.recipe?.recipe_id)}>
+                        <Feather name="eye" size={18} color="#60a5fa" />
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
 
             <View style={styles.actionRow}>
@@ -1164,6 +1226,30 @@ const styles = StyleSheet.create({
     height: 86,
     borderRadius: 10,
     backgroundColor: '#e5e7eb',
+  },
+  imageContainer: {
+    position: 'relative',
+    width: 86,
+    height: 86,
+  },
+  dishTypeBadge: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  dishTypeBadgeText: {
+    fontFamily: FONT_BOLD,
+    fontSize: 9,
+    color: '#fff',
+    textTransform: 'uppercase',
   },
   menuItemBody: {
     flex: 1,

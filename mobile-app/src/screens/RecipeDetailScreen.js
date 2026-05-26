@@ -57,6 +57,19 @@ const dishTypeLabel = (value) => {
   return 'Khác';
 };
 
+const getDishTypeBadgeInfo = (type) => {
+  switch (String(type || '').toUpperCase()) {
+    case 'MAIN_DISH':
+      return { label: 'Món chính', color: '#f97316' };
+    case 'SIDE_DISH':
+      return { label: 'Món phụ', color: '#10b981' };
+    case 'DESSERT':
+      return { label: 'Tráng miệng', color: '#ec4899' };
+    default:
+      return { label: 'Khác', color: '#6b7280' };
+  }
+};
+
 const dbCaloriesLabel = (value) => {
   const normalized = Number(value);
   if (!Number.isFinite(normalized)) {
@@ -268,7 +281,12 @@ export default function RecipeDetailScreen({
         </View>
 
         <View style={styles.card}>
-          <Image source={{ uri: recipe.image_url || FALLBACK_RECIPE_IMAGE }} style={styles.heroImage} />
+          <View style={styles.imageContainer}>
+            <Image source={{ uri: recipe.image_url || FALLBACK_RECIPE_IMAGE }} style={styles.heroImage} />
+            <View style={[styles.dishTypeBadge, { backgroundColor: getDishTypeBadgeInfo(recipe.dish_type).color }]}>
+              <Text style={styles.dishTypeBadgeText}>{getDishTypeBadgeInfo(recipe.dish_type).label}</Text>
+            </View>
+          </View>
 
           <View style={styles.cardBody}>
             <Text style={styles.title}>{recipe.title}</Text>
@@ -497,6 +515,31 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 230,
     backgroundColor: '#d1d5db',
+  },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 230,
+  },
+  dishTypeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 6,
+    zIndex: 10,
+  },
+  dishTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fff',
+    textTransform: 'uppercase',
   },
   cardBody: {
     paddingHorizontal: 14,

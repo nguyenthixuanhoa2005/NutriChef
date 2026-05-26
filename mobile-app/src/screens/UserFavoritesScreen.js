@@ -4,19 +4,29 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
+const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
+
+const FONT_BOLD = Platform.select({
+  ios: 'AvenirNext-DemiBold',
+  android: 'sans-serif-condensed',
+  default: 'system-ui',
+});
 
 const formatDate = (value) => {
   const date = value ? new Date(value) : null;
@@ -58,6 +68,7 @@ export default function UserFavoritesScreen({
   onNavigateMeal,
   onNavigateRecipeSubmission,
   onNavigateUpgrade,
+  onNavigateShopping,
   onOpenRecipeDetail,
 }) {
   const [activeTab, setActiveTab] = useState('recipes');
@@ -68,6 +79,10 @@ export default function UserFavoritesScreen({
   const [mealSetRecipesMap, setMealSetRecipesMap] = useState({});
   const [mealSetLoadingMap, setMealSetLoadingMap] = useState({});
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // New state for ingredient expansion
+  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
+  const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [recipeId]: { [ingName]: boolean } }
 
   const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
 
@@ -81,6 +96,7 @@ export default function UserFavoritesScreen({
     try {
       setLoading(true);
       setExpandedMealSetId(null);
+      setExpandedRecipeId(null);
       setMealSetRecipesMap({});
       setMealSetLoadingMap({});
       const [recipeData, mealSetData] = await Promise.all([
@@ -110,34 +126,107 @@ export default function UserFavoritesScreen({
   }, [favoriteMealSets.length]);
 
   const handleBottomTabPress = (tabKey) => {
-    if (tabKey === 'home') {
-      onNavigateHome?.();
-      return;
+    if (tabKey === 'home') onNavigateHome?.();
+    else if (tabKey === 'suggest') onNavigateSuggest?.();
+    else if (tabKey === 'menu') onNavigateMeal?.();
+    else if (tabKey === 'recipes') onNavigateRecipeSubmission?.();
+    else if (tabKey === 'upgrade') onNavigateUpgrade?.();
+    else if (tabKey === 'shopping') onNavigateShopping?.();
+    else if (tabKey === 'favorites') { /* current */ }
+  };
+
+  const addToShoppingList = async (ingredientName, recipeTitle) => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      let list = saved ? JSON.parse(saved) : [];
+      
+      const newItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: ingredientName,
+        recipeTitle: recipeTitle,
+        checked: false,
+      };
+
+      list.push(newItem);
+      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào danh sách đi chợ.`);
+    } catch (e) {
+      console.error('Failed to add to shopping list', e);
+    }
+  };
+
+  const toggleLocalIngredient = (recipeId, ingName) => {
+    setLocalIngredientStatus((prev) => {
+      const recipeStatus = prev[recipeId] || {};
+      const isChecked = recipeStatus[ingName] || false;
+      
+      return {
+        ...prev,
+        [recipeId]: {
+          ...recipeStatus,
+          [ingName]: !isChecked,
+        },
+      };
+    });
+  };
+
+  const renderRecipeIngredients = (recipe) => {
+    const rawIngredients = typeof recipe.ingredients_json === 'string'
+      ? JSON.parse(recipe.ingredients_json)
+      : (recipe.ingredients_json || []);
+    
+    if (rawIngredients.length === 0) {
+      return (
+        <View style={styles.expandedIngredients}>
+          <Text style={styles.emptyIngredientsText}>Không có dữ liệu nguyên liệu.</Text>
+        </View>
+      );
     }
 
-    if (tabKey === 'suggest') {
-      onNavigateSuggest?.();
-      return;
-    }
+    const statusMap = localIngredientStatus[recipe.recipe_id] || {};
+    
+    const sorted = [...rawIngredients].sort((a, b) => {
+      const aChecked = statusMap[a.name] || false;
+      const bChecked = statusMap[b.name] || false;
+      if (aChecked === bChecked) return 0;
+      return aChecked ? 1 : -1;
+    });
 
-    if (tabKey === 'menu') {
-      onNavigateMeal?.();
-      return;
-    }
+    return (
+      <View style={styles.expandedIngredients}>
+        <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
+        {sorted.map((ing, idx) => {
+          const isChecked = statusMap[ing.name] || false;
+          return (
+            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
+              <Pressable 
+                onPress={() => toggleLocalIngredient(recipe.recipe_id, ing.name)}
+                style={styles.ingCheckbox}
+              >
+                <MaterialCommunityIcons 
+                  name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
+                  size={18} 
+                  color={isChecked ? '#94a3b8' : '#f97316'} 
+                />
+              </Pressable>
+              
+              <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
+                {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
+              </Text>
 
-    if (tabKey === 'recipes') {
-      onNavigateRecipeSubmission?.();
-      return;
-    }
-
-    if (tabKey === 'upgrade') {
-      onNavigateUpgrade?.();
-      return;
-    }
-
-    if (tabKey === 'favorites') {
-      return;
-    }
+              {!isChecked && (
+                <Pressable 
+                  onPress={() => addToShoppingList(ing.name, recipe.title)}
+                  style={styles.ingAddBtn}
+                >
+                  <Feather name="plus-circle" size={18} color="#f97316" />
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   const loadMealSetRecipes = useCallback(async (mealSetId) => {

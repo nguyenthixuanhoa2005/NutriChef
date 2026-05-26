@@ -25,6 +25,20 @@ import {
 import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { API_BASE_URL, authRequest, request } from '../services/client';
 
+const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+
+const FONT_REGULAR = Platform.select({
+  ios: 'AvenirNext-Regular',
+  android: 'sans-serif',
+  default: 'system-ui',
+});
+
+const FONT_BOLD = Platform.select({
+  ios: 'AvenirNext-DemiBold',
+  android: 'sans-serif-condensed',
+  default: 'system-ui',
+});
+
 const INPUT_METHODS = [
   {
     key: 'list',
@@ -158,6 +172,8 @@ const resolveRecipeImage = (imageUrl) => {
   return trimmed;
 };
 
+let cachedSuggestionState = null;
+
 const InputMethodCard = ({ item, active, onPress }) => {
   const IconComponent = item.icon.family;
 
@@ -185,6 +201,7 @@ export default function IngredientSuggestionScreen({
   onNavigateRecipeSubmission,
   onNavigateFavorites,
   onNavigateUpgrade,
+  onNavigateShopping,
   onRequestLogout,
 }) {
   const [recording, setRecording] = useState();
@@ -194,12 +211,12 @@ export default function IngredientSuggestionScreen({
   const [imageUri, setImageUri] = useState(null);
   const [imageSource, setImageSource] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1);
-  const [inputMethod, setInputMethod] = useState('list');
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [textInputValue, setTextInputValue] = useState('');
-  const [ingredients, setIngredients] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const [step, setStep] = useState(() => cachedSuggestionState?.step || 1);
+  const [inputMethod, setInputMethod] = useState(() => cachedSuggestionState?.inputMethod || 'list');
+  const [selectedTags, setSelectedTags] = useState(() => cachedSuggestionState?.selectedTags || []);
+  const [textInputValue, setTextInputValue] = useState(() => cachedSuggestionState?.textInputValue || '');
+  const [ingredients, setIngredients] = useState(() => cachedSuggestionState?.ingredients || []);
+  const [suggestions, setSuggestions] = useState(() => cachedSuggestionState?.suggestions || []);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [ingredientCatalog, setIngredientCatalog] = useState([]);
@@ -207,7 +224,37 @@ export default function IngredientSuggestionScreen({
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedRecipeFavorite, setSelectedRecipeFavorite] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [suggestionIndex, setSuggestionIndex] = useState(() => cachedSuggestionState?.suggestionIndex || 0);
+  const currentRecipe = suggestions[suggestionIndex] || null;
+
+  // Shopping list and expanded logic
+  const [expandedRecipeId, setExpandedRecipeId] = useState(() => cachedSuggestionState?.expandedRecipeId || null);
+  const [localIngredientStatus, setLocalIngredientStatus] = useState(() => cachedSuggestionState?.localIngredientStatus || {}); // { [recipeId]: { [ingName]: boolean } }
+
+  // Persist state to cache
+  useEffect(() => {
+    cachedSuggestionState = {
+      step,
+      inputMethod,
+      selectedTags,
+      textInputValue,
+      ingredients,
+      suggestions,
+      suggestionIndex,
+      expandedRecipeId,
+      localIngredientStatus,
+    };
+  }, [
+    step,
+    inputMethod,
+    selectedTags,
+    textInputValue,
+    ingredients,
+    suggestions,
+    suggestionIndex,
+    expandedRecipeId,
+    localIngredientStatus,
+  ]);
 
   const MAX_FREE_USAGE = 3;
   const isPremium = user?.premium && (!user.premium.expiryDate || new Date(user.premium.expiryDate) > new Date());
@@ -262,13 +309,13 @@ export default function IngredientSuggestionScreen({
     let cancelled = false;
 
     const loadFavoriteStatus = async () => {
-      if (isGuest || !selectedRecipe?.recipe_id) {
+      if (isGuest || !currentRecipe?.recipe_id) {
         setSelectedRecipeFavorite(false);
         return;
       }
 
       try {
-        const response = await authRequest(`/api/recipes/${selectedRecipe.recipe_id}/favorite-status`);
+        const response = await authRequest(`/api/recipes/${currentRecipe.recipe_id}/favorite-status`);
         if (!cancelled) {
           setSelectedRecipeFavorite(Boolean(response?.isFavorite));
         }
@@ -284,10 +331,10 @@ export default function IngredientSuggestionScreen({
     return () => {
       cancelled = true;
     };
-  }, [isGuest, selectedRecipe?.recipe_id]);
+  }, [isGuest, currentRecipe?.recipe_id]);
 
   const handleToggleRecipeFavorite = async () => {
-    if (!selectedRecipe?.recipe_id) {
+    if (!currentRecipe?.recipe_id) {
       return;
     }
 
@@ -301,7 +348,7 @@ export default function IngredientSuggestionScreen({
 
     try {
       setFavoritePending(true);
-      const response = await authRequest(`/api/recipes/${selectedRecipe.recipe_id}/favorite`, {
+      const response = await authRequest(`/api/recipes/${currentRecipe.recipe_id}/favorite`, {
         method: selectedRecipeFavorite ? 'DELETE' : 'POST',
       });
       setSelectedRecipeFavorite(Boolean(response?.isFavorite));
@@ -732,7 +779,6 @@ export default function IngredientSuggestionScreen({
     setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
   };
 
-  const currentRecipe = suggestions[suggestionIndex] || null;
   const handleBottomTabPress = (tabKey) => {
     if (tabKey === 'home') {
       onNavigateHome?.();
@@ -759,9 +805,101 @@ export default function IngredientSuggestionScreen({
       return;
     }
 
+    if (tabKey === 'shopping') {
+      onNavigateShopping?.();
+      return;
+    }
+
     if (tabKey !== 'suggest') {
       Alert.alert('Thông báo', `Tab ${tabKey} chưa được nối màn.`);
     }
+  };
+
+  const addToShoppingList = async (ingredientName, recipeTitle) => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      let list = saved ? JSON.parse(saved) : [];
+      
+      const newItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: ingredientName,
+        recipeTitle: recipeTitle,
+        checked: false,
+      };
+
+      list.push(newItem);
+      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào danh sách đi chợ.`);
+    } catch (e) {
+      console.error('Failed to add to shopping list', e);
+    }
+  };
+
+  const toggleLocalIngredient = (recipeId, ingName) => {
+    setLocalIngredientStatus((prev) => {
+      const recipeStatus = prev[recipeId] || {};
+      const isChecked = recipeStatus[ingName] || false;
+      
+      return {
+        ...prev,
+        [recipeId]: {
+          ...recipeStatus,
+          [ingName]: !isChecked,
+        },
+      };
+    });
+  };
+
+  const renderRecipeIngredients = (recipe) => {
+    const rawIngredients = typeof recipe.ingredients_json === 'string'
+      ? JSON.parse(recipe.ingredients_json)
+      : (recipe.ingredients_json || []);
+    
+    const statusMap = localIngredientStatus[recipe.recipe_id] || {};
+    
+    // Sort: checked items at bottom
+    const sorted = [...rawIngredients].sort((a, b) => {
+      const aChecked = statusMap[a.name] || false;
+      const bChecked = statusMap[b.name] || false;
+      if (aChecked === bChecked) return 0;
+      return aChecked ? 1 : -1;
+    });
+
+    return (
+      <View style={styles.expandedIngredients}>
+        <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
+        {sorted.map((ing, idx) => {
+          const isChecked = statusMap[ing.name] || false;
+          return (
+            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
+              <Pressable 
+                onPress={() => toggleLocalIngredient(recipe.recipe_id, ing.name)}
+                style={styles.ingCheckbox}
+              >
+                <MaterialCommunityIcons 
+                  name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
+                  size={20} 
+                  color={isChecked ? '#94a3b8' : '#f97316'} 
+                />
+              </Pressable>
+              
+              <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
+                {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
+              </Text>
+
+              {!isChecked && (
+                <Pressable 
+                  onPress={() => addToShoppingList(ing.name, recipe.title)}
+                  style={styles.ingAddBtn}
+                >
+                  <Feather name="plus-circle" size={20} color="#f97316" />
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
   };
 
   const handleAccountPress = () => {
@@ -975,25 +1113,22 @@ export default function IngredientSuggestionScreen({
               <Text style={styles.recipeMetaItem}>Độ khó: {currentRecipe.difficulty || '--'}</Text>
               <Text style={styles.recipeMetaItem}>Calories: {currentRecipe.total_calories || 0} kcal</Text>
             </View>
-            {currentRecipe.match_count && (
-              <View style={{ backgroundColor: '#fff7ed', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#ffedd5' }}>
-                <Text style={{ color: '#f97316', fontWeight: '800', fontSize: 16 }}>
-                  {currentRecipe.match_count}
-                </Text>
-                <Text style={{ color: '#9a3412', fontSize: 10, fontWeight: '600' }}>KHỚP</Text>
-              </View>
-            )}
+            <View style={{ gap: 8, alignItems: 'flex-end' }}>
+              <Pressable 
+                onPress={() => setExpandedRecipeId(expandedRecipeId === currentRecipe.recipe_id ? null : currentRecipe.recipe_id)}
+                style={[styles.shoppingToggleBtn, expandedRecipeId === currentRecipe.recipe_id && styles.shoppingToggleBtnActive]}
+              >
+                <MaterialCommunityIcons 
+                  name={expandedRecipeId === currentRecipe.recipe_id ? 'chevron-up' : 'format-list-checks'} 
+                  size={24} 
+                  color={expandedRecipeId === currentRecipe.recipe_id ? '#fff' : '#f97316'} 
+                />
+              </Pressable>
+            </View>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Nguyên liệu cần thiết:</Text>
-        <View style={styles.bulletList}>
-          {recipeIngredients.map((item) => (
-            <Text key={`${item.name}-${item.detail}`} style={styles.bulletText}>
-              - {item.name}{item.detail ? ` (${item.detail})` : ''}
-            </Text>
-          ))}
-        </View>
+        {expandedRecipeId === currentRecipe.recipe_id && renderRecipeIngredients(currentRecipe)}
 
         <Text style={styles.sectionTitle}>Cách làm:</Text>
         <View style={styles.stepsList}>
@@ -1417,7 +1552,6 @@ const styles = StyleSheet.create({
   },
   outlineButton: {
     flex: 1,
-    minWidth: 150,
     minHeight: 48,
     borderRadius: 12,
     borderWidth: 1.5,
@@ -1513,7 +1647,7 @@ const styles = StyleSheet.create({
   recipeImageActions: {
     position: 'absolute',
     top: 10,
-    right: 10,
+    left: 10,
     flexDirection: 'row',
     gap: 8,
   },
@@ -1631,5 +1765,60 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  shoppingToggleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#f97316',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  shoppingToggleBtnActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  expandedIngredients: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  expandedTitle: {
+    fontSize: 14,
+    fontFamily: FONT_BOLD,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  ingCheckbox: {
+    marginRight: 10,
+  },
+  ingName: {
+    flex: 1,
+    fontSize: 15,
+    color: '#334155',
+  },
+  ingNameChecked: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  ingAddBtn: {
+    padding: 4,
   },
 });

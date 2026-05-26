@@ -109,12 +109,54 @@ const dishTypeLabel = (value) => {
   return 'Khác';
 };
 
+const getDishTypeBadgeInfo = (type) => {
+  switch (type) {
+    case 'MAIN_DISH':
+      return { label: 'Món chính', color: '#f97316' };
+    case 'SIDE_DISH':
+      return { label: 'Món phụ', color: '#10b981' };
+    case 'DESSERT':
+      return { label: 'Tráng miệng', color: '#ec4899' };
+    default:
+      return { label: 'Khác', color: '#6b7280' };
+  }
+};
+
 const toIngredientArray = (value) =>
   String(value || '')
     .split(/\n+/)
     .map((line) => String(line || '').trim())
     .filter(Boolean)
-    .map((name) => ({ name }));
+    .map((line) => {
+      // Regex pattern: "Name (Qty Unit)"
+      // Matches "Ingredient Name (100 g)" or "Ingredient (2)"
+      const bracketRegex = /^(.*?)\s*\((.*?)\)$/;
+      const match = line.match(bracketRegex);
+
+      if (match) {
+        const name = match[1].trim();
+        const detail = match[2].trim();
+
+        // Try to separate number and unit from the content inside brackets
+        // e.g., "100g" -> 100 and "g"
+        const unitRegex = /^(\d+(?:\.\d+)?)\s*(.*)$/;
+        const unitMatch = detail.match(unitRegex);
+
+        if (unitMatch) {
+          return {
+            name,
+            qty: Number(unitMatch[1]),
+            unit: unitMatch[2].trim() || null,
+          };
+        }
+
+        // If no number found, treat whole bracket content as unit/detail
+        return { name, qty: null, unit: detail };
+      }
+
+      // No brackets found, just use the whole line as name
+      return { name: line, qty: null, unit: null };
+    });
 
 const toStepsArray = (value) =>
   String(value || '')
@@ -527,10 +569,15 @@ export default function AdminRecipeReviewScreen({
                         {difficultyLabel(item.difficulty)} • {item.cooking_time || '--'} phút • {Number(item.total_calories) || 0} kcal
                       </Text>
                     </View>
-                    <Image
-                      source={{ uri: String(item.image_url || '').trim() || FALLBACK_RECIPE_IMAGE }}
-                      style={styles.itemThumb}
-                    />
+                    <View style={styles.imageContainerCatalog}>
+                      <Image
+                        source={{ uri: String(item.image_url || '').trim() || FALLBACK_RECIPE_IMAGE }}
+                        style={styles.itemThumb}
+                      />
+                      <View style={[styles.dishTypeBadge, { backgroundColor: getDishTypeBadgeInfo(item.dish_type).color }]}>
+                        <Text style={styles.dishTypeBadgeText}>{getDishTypeBadgeInfo(item.dish_type).label}</Text>
+                      </View>
+                    </View>
                   </View>
                   <View style={styles.itemCatalogActions}>
                     <Pressable 
@@ -1159,6 +1206,36 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 10,
     backgroundColor: '#f3f4f6',
+  },
+  imageContainerCatalog: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+  },
+  dishTypeBadge: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
+    elevation: 4,
+    zIndex: 1,
+  },
+  dishTypeBadgeText: {
+    fontFamily: Platform.select({
+      ios: 'AvenirNext-Bold',
+      android: 'sans-serif-condensed',
+      default: 'system-ui',
+    }),
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#fff',
+    textTransform: 'uppercase',
   },
   itemCatalogActions: {
     flexDirection: 'row',

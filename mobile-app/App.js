@@ -7,6 +7,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import IngredientSuggestionScreen from './src/screens/IngredientSuggestionScreen';
 import UserMealSetScreen from './src/screens/UserMealSetScreen';
 import UserFavoritesScreen from './src/screens/UserFavoritesScreen';
+import ShoppingListScreen from './src/screens/ShoppingListScreen';
 import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 import AdminIngredientsScreen from './src/screens/AdminIngredientsScreen';
 import AdminRecipeReviewScreen from './src/screens/AdminRecipeReviewScreen';
@@ -111,6 +112,10 @@ export default function App() {
       return;
     }
     navigateTo('recipe-submit');
+  };
+
+  const handleShoppingTabPress = () => {
+    navigateTo('shopping');
   };
 
   const resetTo = useCallback((screenKey) => {
@@ -318,6 +323,7 @@ export default function App() {
           onNavigateMeal={handleMealTabPress}
           onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => setActiveScreen('favorites')}
+          onNavigateShopping={handleShoppingTabPress}
         />
       );
     }
@@ -336,6 +342,7 @@ export default function App() {
           onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
           onGoBack={() => goBack('home')}
           onRequestLogout={handleLogout}
         />
@@ -355,7 +362,27 @@ export default function App() {
           onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
           onOpenRecipeDetail={handleOpenRecipeDetail}
+          onRequestLogout={handleLogout}
+        />
+      );
+    }
+
+    if (activeScreen === 'shopping') {
+      return (
+        <ShoppingListScreen
+          isGuest={!currentUser}
+          user={currentUser}
+          usageCount={usageCount}
+          onLoginPress={() => navigateTo('login')}
+          onNavigateHome={() => navigateTo('home')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
+          onNavigateFavorites={() => navigateTo('favorites')}
+          onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
           onRequestLogout={handleLogout}
         />
       );
@@ -373,6 +400,7 @@ export default function App() {
           onNavigateMeal={handleMealTabPress}
           onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
           onOpenRecipeDetail={handleOpenRecipeDetail}
           onRequestLogout={handleLogout}
         />
@@ -391,6 +419,7 @@ export default function App() {
           onNavigateMeal={handleMealTabPress}
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
           onRequestLogout={handleLogout}
         />
       );
@@ -417,6 +446,7 @@ export default function App() {
         onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
         onNavigateFavorites={() => navigateTo('favorites')}
         onNavigateUpgrade={() => navigateTo('upgrade')}
+        onNavigateShopping={handleShoppingTabPress}
         onOpenRecipeDetail={handleOpenRecipeDetail}
         isGuest={!currentUser}
         user={currentUser}

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { AppHeader, AppBottomNav } from '../components/AppChrome';
+import { AppHeader, AppBottomNav, AppAccountMenu } from '../components/AppChrome';
 import { authRequest } from '../services/client';
 
 const { width } = Dimensions.get('window');
@@ -64,7 +64,7 @@ const PlanCard = ({ plan, onSelect, isSelected }) => {
       <View style={styles.featuresList}>
         <View style={styles.featureItem}>
           <Feather name="check-circle" size={16} color="#10b981" />
-          <Text style={styles.featureText}>Gợi ý món ăn AI không giới hạn (Tối đa 5 lượt/ngày với bản Free)</Text>
+          <Text style={[styles.featureText]}>Nhận gợi ý món ăn không giới hạn (Tối đa 3 lượt/ngày với bản Free)</Text>
         </View>
         <View style={styles.featureItem}>
           <Feather name="check-circle" size={16} color="#10b981" />
@@ -72,11 +72,11 @@ const PlanCard = ({ plan, onSelect, isSelected }) => {
         </View>
         <View style={styles.featureItem}>
           <Feather name="check-circle" size={16} color="#10b981" />
-          <Text style={styles.featureText}>Xem chi tiết dinh dưỡng 100% món ăn</Text>
+          <Text style={styles.featureText}>Mở khóa tính năng xây dựng mâm cơm</Text>
         </View>
         <View style={styles.featureItem}>
           <Feather name="check-circle" size={16} color="#10b981" />
-          <Text style={styles.featureText}>Đăng bài công thức không giới hạn</Text>
+          <Text style={styles.featureText}>Đóng góp công thức không giới hạn</Text>
         </View>
       </View>
     </Pressable>
@@ -93,12 +93,14 @@ export default function UserUpgradeScreen({
   onNavigateMeal,
   onNavigateRecipeSubmission,
   onNavigateFavorites,
+  onNavigateShopping,
 }) {
   const [user, setUser] = useState(initialUser);
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Payment State
   const [showQR, setShowQR] = useState(false);
@@ -244,6 +246,7 @@ export default function UserUpgradeScreen({
     if (tabKey === 'menu') onNavigateMeal?.();
     if (tabKey === 'recipes') onNavigateRecipeSubmission?.();
     if (tabKey === 'favorites') onNavigateFavorites?.();
+    if (tabKey === 'shopping') onNavigateShopping?.();
   };
 
   return (
@@ -458,7 +461,7 @@ const styles = StyleSheet.create({
   planDescription: { fontSize: 14, color: '#475569', marginBottom: 20, lineHeight: 20 },
   featuresList: { borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 16, gap: 12, marginBottom: 24 },
   featureItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  featureText: { fontSize: 13, color: '#334155', fontWeight: '500' },
+  featureText: { fontSize: 13, color: '#334155', fontWeight: '500', marginRight: 8 },
   footer: { marginTop: 40, alignItems: 'center' },
   upgradeBtn: {
     backgroundColor: '#6366f1',

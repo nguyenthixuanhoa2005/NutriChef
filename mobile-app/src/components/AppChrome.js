@@ -19,6 +19,11 @@ const USER_NAV_ITEMS = [
     icon: { family: MaterialCommunityIcons, name: 'silverware-fork-knife' },
   },
   {
+    key: 'shopping',
+    label: 'Đi chợ',
+    icon: { family: MaterialCommunityIcons, name: 'basket-outline' },
+  },
+  {
     key: 'recipes',
     label: 'Công thức',
     icon: { family: Ionicons, name: 'book-outline' },

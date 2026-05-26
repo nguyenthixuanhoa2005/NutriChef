@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -17,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { authRequest, request } from '../services/client';
 import { AppBottomNav } from '../components/AppChrome';
@@ -25,6 +27,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
 const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
+
+const RELAXING_MUSIC_LIST = [
+  { id: '1', title: 'Piano tĩnh lặng', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3' },
+  { id: '2', title: 'Suối nguồn thanh tịnh', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3' },
+  { id: '3', title: 'Mưa rơi chữa lành', url: 'https://megamusicmonkey.com/wp-content/uploads/2018/01/Healing-Rain.mp3' },
+];
 
 const FALLBACK_RECIPE_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
@@ -140,8 +148,98 @@ export default function RecipeDetailScreen({
   const [isTimerRunning, setIsTimerRunning] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [showCookingGuide, setShowCookingGuide] = useState(true);
+  const [isCompleted, setIsCompleted] = useState(false);
+  
+  // Music States
+  const [musicModalVisible, setMusicModalVisible] = useState(false);
+  const [currentMusic, setCurrentMusic] = useState(null); // { id, title, url }
+  const [musicSound, setMusicSound] = useState(null);
+  const [isMusicLoading, setIsMusicLoading] = useState(false);
+
   const timerRef = useRef(null);
   const flatListRef = useRef(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Music functions
+  const stopMusic = async () => {
+    if (musicSound) {
+      try {
+        await musicSound.stopAsync();
+        await musicSound.unloadAsync();
+      } catch (e) {
+        console.error('Error stopping music', e);
+      }
+      setMusicSound(null);
+      setCurrentMusic(null);
+    }
+  };
+
+  const playMusic = async (track) => {
+    // If same track is playing, stop it (toggle off)
+    if (currentMusic?.id === track.id) {
+      await stopMusic();
+      return;
+    }
+
+    // Stop current if any
+    await stopMusic();
+
+    try {
+      setIsMusicLoading(true);
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: track.url },
+        { shouldPlay: true, isLooping: true }
+      );
+      setMusicSound(sound);
+      setCurrentMusic(track);
+    } catch (e) {
+      console.error('Error playing music', e);
+      Alert.alert('Lỗi', 'Không thể phát bản nhạc này.');
+    } finally {
+      setIsMusicLoading(false);
+    }
+  };
+
+  const toggleMusicModal = () => {
+    setMusicModalVisible(!musicModalVisible);
+  };
+
+  // Sound logic
+  const playSound = async (type) => {
+    try {
+      const soundUrl = type === 'celebration' 
+        ? 'https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3'
+        : 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3';
+      
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: soundUrl },
+        { shouldPlay: true }
+      );
+      
+      // Unload sound after playing to free memory
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error('Failed to play sound', error);
+    }
+  };
+
+  // Pulse animation for the timer when running
+  useEffect(() => {
+    if (cookingModeVisible && isTimerRunning && timeLeft > 0) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.05, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [cookingModeVisible, isTimerRunning, timeLeft]);
 
   const fetchRecipeDetail = useCallback(async () => {
     if (!recipeId) {
@@ -256,11 +354,16 @@ export default function RecipeDetailScreen({
     setIsTimerRunning(true);
     setCookingModeVisible(true);
     setShowCookingGuide(true);
+    setIsCompleted(false);
   };
 
   const handleSkipTimer = () => {
     setTimeLeft(0);
     setIsTimerRunning(false);
+    // If skipping on the last step, consider it completed
+    if (currentStepIndex === steps.length - 1) {
+      setIsCompleted(true);
+    }
   };
 
   const handleToggleTimer = () => {
@@ -273,7 +376,18 @@ export default function RecipeDetailScreen({
     if (index !== currentStepIndex) {
       setCurrentStepIndex(index);
       if (showCookingGuide) setShowCookingGuide(false);
+      
+      // Play a subtle success sound when moving to next step
+      playSound('success');
     }
+  };
+
+  const finishCooking = () => {
+    setIsCompleted(true);
+    setIsTimerRunning(false);
+    setTimeLeft(0);
+    stopMusic(); // Tự động tắt nhạc khi hoàn thành
+    playSound('celebration');
   };
 
   const handleShareRecipe = async () => {
@@ -730,79 +844,191 @@ export default function RecipeDetailScreen({
         presentationStyle="fullScreen"
       >
         <SafeAreaView style={styles.cookingScreen}>
-          {/* Header with Close */}
-          <View style={styles.cookingHeader}>
-            <Pressable onPress={() => setCookingModeVisible(false)} style={styles.closeCookingBtn}>
-              <Feather name="x" size={24} color="#1e293b" />
-            </Pressable>
-            <Text style={styles.cookingTitle} numberOfLines={1}>{recipe?.title}</Text>
-            <View style={{ width: 40 }} />
-          </View>
+          {!isCompleted ? (
+            <>
+              {/* Header with Close & Music */}
+              <View style={styles.cookingHeader}>
+                <Pressable onPress={() => { stopMusic(); setCookingModeVisible(false); }} style={styles.closeCookingBtn}>
+                  <Feather name="x" size={24} color="#1e293b" />
+                </Pressable>
+                <Text style={styles.cookingTitle} numberOfLines={1}>{recipe?.title}</Text>
+                <Pressable onPress={toggleMusicModal} style={styles.musicToggleBtn}>
+                  <MaterialCommunityIcons 
+                    name={currentMusic ? "music-note" : "music-note-off"} 
+                    size={24} 
+                    color={currentMusic ? "#f97316" : "#94a3b8"} 
+                  />
+                  {currentMusic && <View style={styles.musicActiveDot} />}
+                </Pressable>
+              </View>
 
-          {/* Timer Display */}
-          <View style={styles.timerContainer}>
-            <Text style={[styles.timerText, timeLeft === 0 && styles.timerFinished]}>
-              {formatTime(timeLeft)}
-            </Text>
-            <View style={styles.timerControls}>
-              <Pressable onPress={handleToggleTimer} style={styles.timerControlBtn}>
-                <MaterialCommunityIcons 
-                  name={isTimerRunning ? 'pause' : 'play'} 
-                  size={32} 
-                  color="#f97316" 
+              {/* Enhanced Timer Display */}
+              <View style={styles.premiumTimerWrap}>
+                <Animated.View style={[styles.timerFrame, { transform: [{ scale: pulseAnim }] }]}>
+                  <Text style={[styles.timerTextMain, timeLeft < 60 && styles.timerDanger]}>
+                    {formatTime(timeLeft)}
+                  </Text>
+                  <Text style={styles.timerSubText}>THỜI GIAN CÒN LẠI</Text>
+                </Animated.View>
+                
+                {timeLeft > 0 ? (
+                  <View style={styles.timerControlsRow}>
+                    <Pressable onPress={handleToggleTimer} style={styles.controlCircleBtn}>
+                      <MaterialCommunityIcons 
+                        name={isTimerRunning ? 'pause' : 'play'} 
+                        size={28} 
+                        color="#fff" 
+                      />
+                    </Pressable>
+                    <Pressable onPress={handleSkipTimer} style={[styles.controlCircleBtn, styles.skipBtnStyle]}>
+                      <MaterialCommunityIcons name="skip-next" size={28} color="#fff" />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable onPress={finishCooking} style={styles.timerFinishActionBtn}>
+                    <MaterialCommunityIcons name="check-circle" size={24} color="#fff" />
+                    <Text style={styles.timerFinishActionBtnText}>HOÀN THÀNH</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Steps Flashcards */}
+              <View style={styles.flashcardContainer}>
+                <FlatList
+                  ref={flatListRef}
+                  data={steps}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onScroll={handleScroll}
+                  keyExtractor={(item, index) => `step-card-${index}`}
+                  renderItem={({ item, index }) => (
+                    <View style={styles.flashcardWrapper}>
+                      <View style={styles.flashcardPremium}>
+                        <View style={styles.stepBadgeMain}>
+                          <Text style={styles.stepBadgeTextMain}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.stepLabelMain}>BƯỚC TIẾP THEO</Text>
+                        <ScrollView contentContainerStyle={styles.premiumCardBody}>
+                          <Text style={styles.premiumCardContent}>{item.content}</Text>
+                        </ScrollView>
+                        {index === steps.length - 1 && (
+                          <Pressable onPress={finishCooking} style={styles.finishBtn}>
+                            <Text style={styles.finishBtnText}>HOÀN THÀNH MÓN ĂN</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  )}
                 />
-                <Text style={styles.timerControlLabel}>{isTimerRunning ? 'Dừng' : 'Tiếp tục'}</Text>
-              </Pressable>
-              <Pressable onPress={handleSkipTimer} style={styles.timerControlBtn}>
-                <MaterialCommunityIcons name="skip-forward" size={32} color="#64748b" />
-                <Text style={styles.timerControlLabel}>Xong ngay</Text>
+
+                {/* Instruction Overlay */}
+                {showCookingGuide && (
+                  <View pointerEvents="none" style={styles.guideOverlay}>
+                    <Animated.View style={styles.guideContent}>
+                      <MaterialCommunityIcons name="gesture-swipe-horizontal" size={64} color="#fff" />
+                      <Text style={styles.guideText}>Vuốt để xem các bước tiếp theo</Text>
+                    </Animated.View>
+                  </View>
+                )}
+              </View>
+
+              {/* Progress Dots */}
+              <View style={styles.progressDotsRow}>
+                {steps.map((_, i) => (
+                  <View 
+                    key={`dot-${i}`} 
+                    style={[styles.dotPremium, i === currentStepIndex && styles.dotActivePremium]} 
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            /* Celebration Screen */
+            <View style={styles.celebrationScreen}>
+              <Animated.View style={styles.celebrationContent}>
+                <MaterialCommunityIcons name="party-popper" size={100} color="#f97316" />
+                <Text style={styles.congratsTitle}>Tuyệt vời!</Text>
+                <Text style={styles.congratsSub}>Bạn đã hoàn thành món</Text>
+                <Text style={styles.congratsRecipeName}>{recipe?.title}</Text>
+                
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <MaterialCommunityIcons name="fire" size={24} color="#f97316" />
+                    <Text style={styles.statValue}>{dbCaloriesLabel(recipe?.total_calories)}</Text>
+                    <Text style={styles.statLabel}>kcal</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <MaterialCommunityIcons name="clock-outline" size={24} color="#60a5fa" />
+                    <Text style={styles.statValue}>{recipe?.cooking_time}</Text>
+                    <Text style={styles.statLabel}>phút</Text>
+                  </View>
+                </View>
+
+                <Pressable 
+                  onPress={() => setCookingModeVisible(false)} 
+                  style={styles.backToDetailBtn}
+                >
+                  <Text style={styles.backToDetailBtnText}>Quay lại công thức</Text>
+                </Pressable>
+              </Animated.View>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* --- Music Selection Modal --- */}
+      <Modal
+        visible={musicModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={toggleMusicModal}
+      >
+        <Pressable style={styles.musicModalBackdrop} onPress={toggleMusicModal}>
+          <View style={styles.musicCard}>
+            <View style={styles.musicHeader}>
+              <Text style={styles.musicTitle}>Nhạc thư giãn nấu ăn</Text>
+              <Pressable onPress={toggleMusicModal}>
+                <Feather name="x" size={20} color="#64748b" />
               </Pressable>
             </View>
-          </View>
+            
+            <View style={styles.musicList}>
+              {RELAXING_MUSIC_LIST.map((track) => (
+                <Pressable 
+                  key={track.id} 
+                  style={[styles.musicItem, currentMusic?.id === track.id && styles.musicItemActive]}
+                  onPress={() => playMusic(track)}
+                >
+                  <MaterialCommunityIcons 
+                    name={currentMusic?.id === track.id ? "pause-circle" : "play-circle"} 
+                    size={32} 
+                    color={currentMusic?.id === track.id ? "#f97316" : "#cbd5e1"} 
+                  />
+                  <Text style={[styles.musicItemText, currentMusic?.id === track.id && styles.musicItemTextActive]}>
+                    {track.title}
+                  </Text>
+                  {currentMusic?.id === track.id && (
+                    <MaterialCommunityIcons name="volume-high" size={18} color="#f97316" />
+                  )}
+                </Pressable>
+              ))}
+            </View>
 
-          {/* Steps Flashcards */}
-          <View style={styles.flashcardContainer}>
-            <FlatList
-              ref={flatListRef}
-              data={steps}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={handleScroll}
-              keyExtractor={(item, index) => `step-card-${index}`}
-              renderItem={({ item, index }) => (
-                <View style={styles.flashcard}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardNumber}>Bước {index + 1}/{steps.length}</Text>
-                  </View>
-                  <ScrollView contentContainerStyle={styles.cardBodyScroll}>
-                    <Text style={styles.cardContent}>{item.content}</Text>
-                  </ScrollView>
-                </View>
-              )}
-            />
+            {currentMusic && (
+              <Pressable style={styles.stopMusicBtn} onPress={stopMusic}>
+                <Text style={styles.stopMusicBtnText}>Tắt nhạc</Text>
+              </Pressable>
+            )}
 
-            {/* Instruction Overlay */}
-            {showCookingGuide && (
-              <View pointerEvents="none" style={styles.guideOverlay}>
-                <View style={styles.guideContent}>
-                  <MaterialCommunityIcons name="gesture-swipe-horizontal" size={48} color="#fff" />
-                  <Text style={styles.guideText}>Vuốt trái/phải để xem các bước</Text>
-                </View>
+            {isMusicLoading && (
+              <View style={styles.musicLoadingOverlay}>
+                <ActivityIndicator color="#f97316" />
               </View>
             )}
           </View>
-
-          {/* Progress Dots */}
-          <View style={styles.progressDots}>
-            {steps.map((_, i) => (
-              <View 
-                key={`dot-${i}`} 
-                style={[styles.dot, i === currentStepIndex && styles.dotActive]} 
-              />
-            ))}
-          </View>
-        </SafeAreaView>
+        </Pressable>
       </Modal>
 
       {!isGuest && !cookingModeVisible ? (
@@ -1263,94 +1489,344 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
   },
-  timerContainer: {
+  premiumTimerWrap: {
     alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: '#f8fafc',
+    paddingVertical: 24,
+    backgroundColor: '#fff',
   },
-  timerText: {
-    fontSize: 64,
-    fontWeight: '800',
+  timerFrame: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 6,
+    borderColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    shadowColor: '#f97316',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  timerTextMain: {
+    fontSize: 42,
+    fontWeight: '900',
     color: '#1e293b',
     fontVariant: ['tabular-nums'],
   },
-  timerFinished: {
+  timerSubText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  timerDanger: {
     color: '#ef4444',
   },
-  timerControls: {
+  timerControlsRow: {
     flexDirection: 'row',
-    gap: 40,
-    marginTop: 16,
+    gap: 24,
+    marginTop: 24,
   },
-  timerControlBtn: {
+  controlCircleBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#f97316',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 4,
   },
-  timerControlLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
+  skipBtnStyle: {
+    backgroundColor: '#64748b',
   },
   flashcardContainer: {
     flex: 1,
     position: 'relative',
   },
-  flashcard: {
+  flashcardWrapper: {
     width: SCREEN_WIDTH,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  flashcardPremium: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 32,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 30,
+    elevation: 5,
   },
-  cardNumber: {
-    fontSize: 14,
+  stepBadgeMain: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  stepBadgeTextMain: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  stepLabelMain: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#f97316',
-    marginBottom: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    color: '#94a3b8',
+    letterSpacing: 2,
+    marginBottom: 24,
   },
-  cardBodyScroll: {
+  premiumCardBody: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingBottom: 40,
   },
-  cardContent: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#334155',
-    lineHeight: 36,
+  premiumCardContent: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1e293b',
     textAlign: 'center',
+    lineHeight: 42,
   },
-  progressDots: {
+  finishBtn: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 99,
+    marginTop: 24,
+  },
+  finishBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  musicToggleBtn: {
+    padding: 8,
+    position: 'relative',
+  },
+  musicActiveDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f97316',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  musicModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  musicCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    minHeight: 300,
+  },
+  musicHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  musicTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  musicList: {
+    gap: 12,
+  },
+  musicItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    gap: 12,
+  },
+  musicItemActive: {
+    borderColor: '#f97316',
+    backgroundColor: '#fff7ed',
+  },
+  musicItemText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  musicItemTextActive: {
+    color: '#f97316',
+  },
+  stopMusicBtn: {
+    marginTop: 24,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+  },
+  stopMusicBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  musicLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 32,
+  },
+  progressDotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
-  dot: {
+  dotPremium: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#e2e8f0',
   },
-  dotActive: {
+  dotActivePremium: {
     backgroundColor: '#f97316',
-    width: 20,
+    width: 24,
   },
   guideOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+    borderRadius: 32,
+    marginHorizontal: 24,
+    marginVertical: 12,
   },
   guideContent: {
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
   },
   guideText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+
+  // Celebration Styles
+  celebrationScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  celebrationContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  congratsTitle: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: '#1e293b',
+    marginTop: 24,
+  },
+  congratsSub: {
+    fontSize: 16,
+    color: '#64748b',
+    marginTop: 8,
+  },
+  congratsRecipeName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#f97316',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 40,
+    backgroundColor: '#f8fafc',
+    padding: 24,
+    borderRadius: 24,
+    width: '100%',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e2e8f0',
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  backToDetailBtn: {
+    marginTop: 48,
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 40,
+    paddingVertical: 18,
+    borderRadius: 20,
+    width: '100%',
+    alignItems: 'center',
+  },
+  backToDetailBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  timerFinishActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginTop: 24,
+    shadowColor: '#10b981',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  timerFinishActionBtnText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 });

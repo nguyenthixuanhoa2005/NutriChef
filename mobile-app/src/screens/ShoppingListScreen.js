@@ -28,7 +28,8 @@ const FONT_BOLD = Platform.select({
   default: 'system-ui',
 });
 
-const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
+// Helpers for storage keys
+const getShoppingListKey = (userId) => `nutrichef_shopping_list_${userId || 'guest'}`;
 
 export default function ShoppingListScreen({
   onNavigateShopping,
@@ -61,7 +62,8 @@ export default function ShoppingListScreen({
 
   const loadShoppingList = async () => {
     try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      const storageKey = getShoppingListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       if (saved) {
         setList(JSON.parse(saved));
       }
@@ -74,7 +76,8 @@ export default function ShoppingListScreen({
 
   const saveShoppingList = async (newList) => {
     try {
-      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(newList));
+      const storageKey = getShoppingListKey(user?.userId);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newList));
     } catch (e) {
       console.error('Failed to save shopping list', e);
     }

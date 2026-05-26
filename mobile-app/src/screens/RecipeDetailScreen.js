@@ -25,8 +25,9 @@ import { AppBottomNav } from '../components/AppChrome';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
-const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
+// Helpers for storage keys
+const getShoppingListKey = (userId) => `nutrichef_shopping_list_${userId || 'guest'}`;
+const getPrepListKey = (userId) => `nutrichef_prep_status_${userId || 'guest'}`;
 
 const RELAXING_MUSIC_LIST = [
   { id: '1', title: 'Piano tĩnh lặng', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3' },
@@ -276,7 +277,8 @@ export default function RecipeDetailScreen({
 
   const loadPrepStatus = useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      const storageKey = getPrepListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       if (saved) {
         const fullStatus = JSON.parse(saved);
         setLocalIngredientStatus(fullStatus[recipeId] || {});
@@ -284,14 +286,15 @@ export default function RecipeDetailScreen({
     } catch (e) {
       console.error('Failed to load prep status', e);
     }
-  }, [recipeId]);
+  }, [recipeId, user?.userId]);
 
   const savePrepStatus = async (newStatus) => {
     try {
-      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      const storageKey = getPrepListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       const fullStatus = saved ? JSON.parse(saved) : {};
       fullStatus[recipeId] = newStatus;
-      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(fullStatus));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(fullStatus));
     } catch (e) {
       console.error('Failed to save prep status', e);
     }
@@ -299,14 +302,15 @@ export default function RecipeDetailScreen({
 
   const loadShoppingListForSync = useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      const storageKey = getShoppingListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       if (saved) {
         setShoppingList(JSON.parse(saved));
       }
     } catch (e) {
       console.error('Failed to load shopping list for sync', e);
     }
-  }, []);
+  }, [user?.userId]);
 
   useEffect(() => {
     fetchRecipeDetail();
@@ -360,10 +364,6 @@ export default function RecipeDetailScreen({
   const handleSkipTimer = () => {
     setTimeLeft(0);
     setIsTimerRunning(false);
-    // If skipping on the last step, consider it completed
-    if (currentStepIndex === steps.length - 1) {
-      setIsCompleted(true);
-    }
   };
 
   const handleToggleTimer = () => {
@@ -386,9 +386,16 @@ export default function RecipeDetailScreen({
     setIsCompleted(true);
     setIsTimerRunning(false);
     setTimeLeft(0);
-    stopMusic(); // Tự động tắt nhạc khi hoàn thành
+    stopMusic(); // Đảm bảo tắt nhạc khi hoàn thành
     playSound('celebration');
   };
+
+  // Tự động tắt nhạc khi đóng Modal nấu ăn
+  useEffect(() => {
+    if (!cookingModeVisible) {
+      stopMusic();
+    }
+  }, [cookingModeVisible]);
 
   const handleShareRecipe = async () => {
     if (!recipe) {
@@ -500,7 +507,8 @@ export default function RecipeDetailScreen({
 
   const addToShoppingList = async (ingredientName, recipeTitle, qty, unit) => {
     try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      const storageKey = getShoppingListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       let list = saved ? JSON.parse(saved) : [];
       
       const newItem = {
@@ -513,7 +521,7 @@ export default function RecipeDetailScreen({
       };
 
       list.push(newItem);
-      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(list));
       Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào giỏ hàng.`);
     } catch (e) {
       console.error('Failed to add to shopping list', e);

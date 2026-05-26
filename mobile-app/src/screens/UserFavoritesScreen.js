@@ -17,8 +17,9 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest, request } from '../services/client';
 
-const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
-const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
+// Helpers for storage keys
+const getShoppingListKey = (userId) => `nutrichef_shopping_list_${userId || 'guest'}`;
+const getPrepListKey = (userId) => `nutrichef_prep_status_${userId || 'guest'}`;
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
@@ -179,18 +180,20 @@ export default function UserFavoritesScreen({
 
   const loadPrepStatus = useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem(PREP_LIST_STORAGE_KEY);
+      const storageKey = getPrepListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       if (saved) {
         setLocalIngredientStatus(JSON.parse(saved));
       }
     } catch (e) {
       console.error('Failed to load prep status', e);
     }
-  }, []);
+  }, [user?.userId]);
 
   const savePrepStatus = async (newStatus) => {
     try {
-      await AsyncStorage.setItem(PREP_LIST_STORAGE_KEY, JSON.stringify(newStatus));
+      const storageKey = getPrepListKey(user?.userId);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newStatus));
     } catch (e) {
       console.error('Failed to save prep status', e);
     }
@@ -198,14 +201,15 @@ export default function UserFavoritesScreen({
 
   const loadShoppingListForSync = useCallback(async () => {
     try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      const storageKey = getShoppingListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       if (saved) {
         setShoppingList(JSON.parse(saved));
       }
     } catch (e) {
       console.error('Failed to load shopping list for sync', e);
     }
-  }, []);
+  }, [user?.userId]);
 
   useEffect(() => {
     loadFavorites();
@@ -233,7 +237,8 @@ export default function UserFavoritesScreen({
 
   const addToShoppingList = async (ingredientName, recipeTitle, qty, unit) => {
     try {
-      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      const storageKey = getShoppingListKey(user?.userId);
+      const saved = await AsyncStorage.getItem(storageKey);
       let list = saved ? JSON.parse(saved) : [];
       
       const newItem = {
@@ -246,7 +251,7 @@ export default function UserFavoritesScreen({
       };
 
       list.push(newItem);
-      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(list));
       Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào giỏ hàng.`);
     } catch (e) {
       console.error('Failed to add to shopping list', e);

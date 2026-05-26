@@ -34,14 +34,15 @@ export default function App() {
   const isPremium = currentUser?.premium && (!currentUser.premium.expiryDate || new Date(currentUser.premium.expiryDate) > new Date());
   const isLimitReached = !isPremium && usageCount >= MAX_FREE_USAGE;
 
-  const getTodayKey = () => {
+  const getTodayKey = (userId) => {
     const now = new Date();
-    return `usage_${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    const dateStr = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    return `usage_${userId || 'guest'}_${dateStr}`;
   };
 
   const loadUsage = useCallback(async () => {
     try {
-      const key = getTodayKey();
+      const key = getTodayKey(currentUser?.userId);
       const saved = await AsyncStorage.getItem(key);
       if (saved) {
         setUsageCount(parseInt(saved, 10) || 0);
@@ -51,12 +52,12 @@ export default function App() {
     } catch (e) {
       console.error('Failed to load usage count', e);
     }
-  }, []);
+  }, [currentUser?.userId]);
 
   const incrementUsage = async () => {
     if (isPremium) return;
     try {
-      const key = getTodayKey();
+      const key = getTodayKey(currentUser?.userId);
       const nextCount = usageCount + 1;
       await AsyncStorage.setItem(key, String(nextCount));
       setUsageCount(nextCount);

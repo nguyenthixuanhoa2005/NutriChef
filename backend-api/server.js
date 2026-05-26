@@ -2123,10 +2123,10 @@ app.get('/api/admin/stats', authenticateAccessToken, asyncHandler(async (req, re
         return;
     }
 
-    const userCount = await db.query('SELECT COUNT(*) FROM app_user');
+    const userCount = await db.query("SELECT COUNT(*) FROM app_user WHERE status != 'DELETED'");
     const recipeCount = await db.query("SELECT COUNT(*) FROM recipe WHERE status != 'HIDDEN'");
     const pendingCount = await db.query("SELECT COUNT(*) FROM recipe_submission WHERE status = 'PENDING'");
-    const ingredientCount = await db.query('SELECT COUNT(*) FROM ingredient');
+    const ingredientCount = await db.query("SELECT COUNT(*) FROM ingredient WHERE status = 'ACTIVE'");
     
     const recentRecipes = await db.query(`
         SELECT r.title, r.created_at, COALESCE(u.full_name, 'NutriChef') as author_name

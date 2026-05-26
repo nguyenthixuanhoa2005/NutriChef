@@ -217,7 +217,6 @@ const buildMealItems = ({ recipes, targetCalories, mealTime, mealGoal }) => {
 
     let pool = getPool(preferredType);
 
-    // Smarter Fallback: If preferred category is empty, try similar/lighter ones first
     if (pool.length === 0) {
       const fallbackOrder = {
         DESSERT: ['SIDE_DISH', 'OTHER'],
@@ -233,11 +232,9 @@ const buildMealItems = ({ recipes, targetCalories, mealTime, mealGoal }) => {
       }
     }
 
-    // Final fallback to any unused recipe
     if (pool.length === 0) {
       pool = uniqueRecipes.filter((r) => !usedIds.has(r.recipe_id));
     }
-    // Absolute final fallback (allow duplicates if pool exhausted)
     if (pool.length === 0) pool = uniqueRecipes;
 
     return [...pool].sort((a, b) => {
@@ -256,13 +253,18 @@ const buildMealItems = ({ recipes, targetCalories, mealTime, mealGoal }) => {
     }
   };
 
+  let remainingCalories = targetTotal;
+
   for (let i = 0; i < pickCount; i += 1) {
+    const dishesLeft = pickCount - i;
+    // Tính mục tiêu calorie cho món hiện tại dựa trên ngân sách còn lại
+    const currentTarget = Math.max(60, Math.round(remainingCalories / dishesLeft));
     const targetType = currentTemplate[i % currentTemplate.length];
 
-    const recipe = getBestForCategory(targetType, perDishCalories);
+    const recipe = getBestForCategory(targetType, currentTarget);
     if (recipe) {
       usedIds.add(recipe.recipe_id);
-      const calories = toDbCalories(recipe.total_calories) || perDishCalories;
+      const calories = toDbCalories(recipe.total_calories) || currentTarget;
       const macros = buildMacroFromCalories(calories);
       
       picked.push({
@@ -274,6 +276,9 @@ const buildMealItems = ({ recipes, targetCalories, mealTime, mealGoal }) => {
         carbs: macros.carbs,
         fat: macros.fat,
       });
+
+      // Cập nhật lại ngân sách còn lại sau khi đã chọn xong 1 món
+      remainingCalories -= calories;
     }
   }
 

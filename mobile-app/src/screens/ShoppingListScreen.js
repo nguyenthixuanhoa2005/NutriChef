@@ -45,6 +45,7 @@ export default function ShoppingListScreen({
   onNavigateRecipeSubmission,
   onNavigateFavorites,
   onNavigateUpgrade,
+  onAchievementPress,
 }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -202,6 +203,7 @@ export default function ShoppingListScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onRequestLogout}
       />
 

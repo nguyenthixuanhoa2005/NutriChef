@@ -25,6 +25,11 @@ const {
 const {
     addIngredient,
 } = require('./src/services/adminIngredientService');
+const {
+    getUserAchievements,
+    updateAchievementProgress,
+    equipTitle,
+} = require('./src/services/achievementService');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -40,20 +45,13 @@ const INGREDIENT_STATUS_ACTIVE = 'ACTIVE';
 const INGREDIENT_STATUS_HIDDEN = 'HIDDEN';
 let ingredientSoftDeleteReady = false;
 let recipeSubmissionTableReady = false;
+let achievementTablesReady = false;
 
 if (!ACCESS_TOKEN_SECRET || !REFRESH_TOKEN_SECRET) {
     throw new Error('Thiếu JWT_ACCESS_SECRET hoặc JWT_REFRESH_SECRET trong .env');
 }
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept'],
-    credentials: true
-}));
-
+// --- UTILS & MIDDLEWARES (MOVED UP TO FIX REFERENCE ERROR) ---
 const toMs = (expiresIn) => {
     const value = String(expiresIn).trim();
     const match = /^(\d+)([smhd])$/.exec(value);
@@ -81,6 +79,7 @@ const sanitizeUser = (row, roles = []) => ({
     fullName: row.full_name,
     avatarUrl: row.avatar_url,
     status: row.status,
+    equippedTitle: row.equipped_title || null,
     roles,
     primaryRole: roles[0] || 'USER',
 });
@@ -96,42 +95,6 @@ const getUserRoles = async (userId) => {
     );
 
     return roleResult.rows.map((r) => String(r.role_name || '').toUpperCase()).filter(Boolean);
-};
-
-const ensureUserRoleAssigned = async (userId, roleName = 'USER', client = null) => {
-    const normalizedRole = String(roleName || 'USER').trim().toUpperCase();
-    const queryProvider = client || db;
-
-    let roleResult = await queryProvider.query(
-        `SELECT role_id
-         FROM role
-         WHERE UPPER(role_name) = UPPER($1)
-         LIMIT 1`,
-        [normalizedRole]
-    );
-
-    let roleId = roleResult.rows[0]?.role_id;
-    if (!roleId) {
-        const insertedRole = await queryProvider.query(
-            `INSERT INTO role (role_name)
-             VALUES ($1)
-             ON CONFLICT (role_name) DO UPDATE SET role_name = EXCLUDED.role_name
-             RETURNING role_id`,
-            [normalizedRole]
-        );
-        roleId = insertedRole.rows[0]?.role_id;
-    }
-
-    if (!roleId) {
-        throw new Error('Khong tao duoc role mac dinh cho user');
-    }
-
-    await queryProvider.query(
-        `INSERT INTO user_role (user_id, role_id)
-         VALUES ($1, $2)
-         ON CONFLICT (user_id, role_id) DO NOTHING`,
-        [userId, roleId]
-    );
 };
 
 const getBearerToken = (req) => {
@@ -164,7 +127,7 @@ const authenticateAccessToken = async (req, res, next) => {
         }
 
         const userResult = await db.query(
-            `SELECT user_id, email, password_hash, full_name, avatar_url, status, deleted_at
+            `SELECT user_id, email, password_hash, full_name, avatar_url, status, equipped_title, deleted_at
              FROM app_user
              WHERE user_id = $1
              LIMIT 1`,
@@ -249,6 +212,38 @@ const verifyPassword = async (plainPassword, storedPasswordHash) => {
     return plainPassword === storedPasswordHash;
 };
 
+// --- END UTILS & MIDDLEWARES ---
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept'],
+    credentials: true
+}));
+
+// --- DEBUG ROUTE ---
+app.get('/api/ping', (req, res) => res.json({ status: 'ok', message: 'Pong! Server is updated.' }));
+
+// --- ACHIEVEMENT API (MOVED UP) ---
+app.get('/api/achievements', authenticateAccessToken, asyncHandler(async (req, res) => {
+    try {
+        console.log(`[API] GET /api/achievements - User: ${req.authUser?.user_id}`);
+        const achievements = await getUserAchievements(req.authUser.user_id);
+        return res.status(200).json({ status: 'success', achievements: achievements || [] });
+    } catch (error) {
+        console.error('❌ Lỗi API achievements:', error.message);
+        return res.status(500).json({ status: 'error', message: error.message });
+    }
+}));
+
+app.post('/api/achievements/equip-title', authenticateAccessToken, asyncHandler(async (req, res) => {
+    const { title } = req.body || {};
+    await equipTitle(req.authUser.user_id, title || null);
+    res.json({ status: 'success', message: 'Cập nhật danh hiệu thành công' });
+}));
+
 const ensureIngredientSoftDeleteReady = async () => {
     if (ingredientSoftDeleteReady) {
         return;
@@ -307,6 +302,52 @@ const ensureRecipeSubmissionTableReady = async () => {
     );
 
     recipeSubmissionTableReady = true;
+};
+
+const ensureAchievementTablesReady = async () => {
+    if (achievementTablesReady) return;
+
+    await db.query(`ALTER TABLE app_user ADD COLUMN IF NOT EXISTS equipped_title VARCHAR(100)`);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS achievement (
+            achievement_id SERIAL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description TEXT,
+            criteria_type VARCHAR(50) NOT NULL,
+            criteria_value INT NOT NULL,
+            title_reward VARCHAR(100),
+            icon_url VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS user_achievement (
+            user_id INT REFERENCES app_user(user_id) ON DELETE CASCADE,
+            achievement_id INT REFERENCES achievement(achievement_id) ON DELETE CASCADE,
+            progress INT DEFAULT 0,
+            is_completed BOOLEAN DEFAULT FALSE,
+            completed_at TIMESTAMP,
+            PRIMARY KEY (user_id, achievement_id)
+        )
+    `);
+
+    // Seed achievements if empty
+    const countRes = await db.query('SELECT COUNT(*) FROM achievement');
+    if (parseInt(countRes.rows[0].count) === 0) {
+        await db.query(`
+            INSERT INTO achievement (name, description, criteria_type, criteria_value, title_reward) VALUES
+            ('Người mới vào bếp', 'Đăng tải 1 công thức được duyệt', 'RECIPE_COUNT', 1, 'Tập sự đầu bếp'),
+            ('Đầu bếp nghiệp dư', 'Đăng tải 5 công thức được duyệt', 'RECIPE_COUNT', 5, 'Đầu bếp nghiệp dư'),
+            ('Vua đầu bếp', 'Đăng tải 20 công thức được duyệt', 'RECIPE_COUNT', 20, 'Vua đầu bếp'),
+            ('Người đánh giá tận tâm', 'Gửi 5 đánh giá cho các công thức', 'REVIEW_COUNT', 5, 'Chuyên gia phê bình'),
+            ('Kẻ sành ăn', 'Lưu 10 công thức vào mục yêu thích', 'FAVORITE_COUNT', 10, 'Kẻ sành ăn'),
+            ('Chuyên gia lên thực đơn', 'Lưu 5 mâm cơm yêu thích', 'MEAL_SET_COUNT', 5, 'Kiến trúc sư món ăn')
+        `);
+    }
+
+    achievementTablesReady = true;
 };
 
 const ensureAdminRole = async (req, res) => {
@@ -915,6 +956,9 @@ app.post('/api/recipes/:id/ratings', authenticateAccessToken, async (req, res) =
             );
         }
 
+        // Hook cập nhật thành tựu
+        updateAchievementProgress(userId, 'REVIEW_COUNT').catch(console.error);
+
         // Lấy lại thông số trung bình để trả về cập nhật UI
         const stats = await db.query(
             `SELECT 
@@ -1313,6 +1357,10 @@ app.patch('/api/admin/recipe-submissions/:id/review', authenticateAccessToken, a
 
         await client.query('COMMIT');
         safeUnlink(submission.temp_image_path);
+
+        // Hook cập nhật thành tựu (không đợi vì không muốn làm chậm response)
+        updateAchievementProgress(submission.submitter_id, 'RECIPE_COUNT').catch(console.error);
+
         return res.json({ status: 'success', submission: approved.rows[0] });
     } catch (error) {
         try {
@@ -1354,6 +1402,9 @@ app.post('/api/recipes/:id/favorite', authenticateAccessToken, async (req, res) 
              ON CONFLICT (user_id, recipe_id) DO NOTHING`,
             [req.authUser.user_id, recipeId]
         );
+
+        // Hook cập nhật thành tựu
+        updateAchievementProgress(req.authUser.user_id, 'FAVORITE_COUNT').catch(console.error);
 
         const likeCountResult = await db.query(
             `SELECT COUNT(*)::int AS like_count
@@ -1494,6 +1545,11 @@ app.post('/api/meal-sets/favorite', authenticateAccessToken, async (req, res) =>
              DO UPDATE SET saved_at = CURRENT_TIMESTAMP`,
             [req.authUser.user_id, mealSetId]
         );
+
+        await client.query('COMMIT');
+
+        // Hook cập nhật thành tựu (sau khi commit thành công)
+        updateAchievementProgress(req.authUser.user_id, 'MEAL_SET_COUNT').catch(console.error);
 
         const finalMealSet = await client.query(
             `SELECT meal_set_id, name, target_calories, total_calories, meal_type, goal_type, image_url, created_at
@@ -2489,9 +2545,44 @@ app.delete('/api/admin/recipes/:id', authenticateAccessToken, asyncHandler(async
     }
 }));
 
-ensureIngredientSoftDeleteReady().catch((error) => {
-    console.error('❌ Lỗi khởi tạo status xóa mềm cho ingredient:', error.message);
-});
+// Khởi tạo các bảng đồng bộ hơn hoặc log lỗi chi tiết
+(async () => {
+    try {
+        await ensureIngredientSoftDeleteReady();
+        await ensureAchievementTablesReady();
+        console.log('✅ Hệ thống thành tựu đã sẵn sàng');
+    } catch (error) {
+        console.error('❌ Lỗi khởi tạo hệ thống:', error.message);
+    }
+})();
+
+// --- ACHIEVEMENT API ---
+app.get('/api/achievements', authenticateAccessToken, asyncHandler(async (req, res) => {
+    try {
+        console.log(`[API] GET /api/achievements - User: ${req.authUser?.user_id}`);
+        const achievements = await getUserAchievements(req.authUser.user_id);
+        
+        // Đảm bảo luôn trả về JSON hợp lệ
+        return res.status(200).json({ 
+            status: 'success', 
+            achievements: achievements || [] 
+        });
+    } catch (error) {
+        console.error('❌ Lỗi API achievements:', error.message);
+        // Trả về JSON lỗi thay vì để errorHandler xử lý (để tránh rủi ro trả về HTML)
+        return res.status(500).json({ 
+            status: 'error', 
+            message: 'Không thể lấy danh sách thành tựu: ' + error.message 
+        });
+    }
+}));
+
+app.post('/api/achievements/equip-title', authenticateAccessToken, asyncHandler(async (req, res) => {
+    const { title } = req.body || {};
+    // title có thể là null để tháo danh hiệu
+    await equipTitle(req.authUser.user_id, title || null);
+    res.json({ status: 'success', message: 'Cập nhật danh hiệu thành công' });
+}));
 
 // --- PREMIUM PLANS & PAYMENTS ---
 app.get('/api/premium-plans', async (req, res) => {

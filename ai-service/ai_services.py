@@ -16,13 +16,39 @@ UPLOAD_FOLDER = './temp_uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # --- CẤU HÌNH DANH SÁCH NGUYÊN LIỆU ---
+# YOLOv8n mặc định được huấn luyện trên tập COCO (80 loại đối tượng).
+# Chúng ta map các đối tượng COCO sang nguyên liệu tương ứng trong DB.
 VALID_INGREDIENTS_MAP = {
-    "banana": "Chuối", "apple": "Táo", "orange": "Cam", "broccoli": "Súp lơ",
-    "carrot": "Cà rốt", "potted plant": "Rau xanh", "sandwich": "Bánh mì",
-    "cake": "Bánh ngọt", "hot dog": "Xúc xích", "pizza": "Pizza",
-    "donut": "Bánh ngọt", "bird": "Thịt gà", "cow": "Thịt bò", "fish": "Cá",
-    "noddle": "Mì", "egg": "Trứng", "meat": "Thịt lợn", "shrimp": "Tôm",
+    # Nhóm rau củ quả (Có sẵn trong COCO - Map lại để phù hợp với bếp)
+    "banana": "Chuối", 
+    "apple": "Cà chua",         # Hack: Cà chua thường bị nhận diện là táo
+    "orange": "Cà chua",        # Hack: Hoặc quả cam
+    "broccoli": "Súp lơ",
+    "carrot": "Cà rốt", 
     
+    # Nhóm thực phẩm chế biến
+    "sandwich": "Bánh mì",
+    "cake": "Bánh ngọt", 
+    "hot dog": "Xúc xích", 
+    "pizza": "Pizza",
+    "donut": "Bánh ngọt",
+    
+    # Nhóm "Hacks" đặc biệt cho Cà chua & Trứng
+    "sports ball": "Trứng",     # Hack: Trứng thường bị nhận diện là bóng nhỏ
+    "potted plant": "Rau xanh", 
+    "tie": "Hành lá",           
+    "bird": "Thịt gà",          
+    "cow": "Thịt bò",           
+    "sheep": "Thịt cừu",
+    "bottle": "Gia vị",         
+    "cup": "Nước",
+    "bowl": "Gia vị",
+    "fish": "Cá",
+    "cat": "Cá",
+    "broccoli": "Dưa hấu",
+    "couch": "Trứng",
+    "person": "Trứng",
+    "teddy bear": "Trứng",
 }
 
 VOICE_INGREDIENT_ALIASES = {
@@ -40,6 +66,8 @@ VOICE_INGREDIENT_ALIASES = {
     "Khoai lang": ["khoai lang", "khoai lang tím"],
     "Tôm": ["tôm sú", "tôm"],
     "Cá": ["cá basa", "cá hồi", "cá trê"],
+    "Cà chua": ["cà chua", "trái cà chua", "quả cà chua"],
+    "Trứng": ["trứng", "quả trứng", "hột gà", "trứng gà", "trứng vịt"],
 }
 
 INGREDIENT_WHITELIST = set()

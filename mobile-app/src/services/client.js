@@ -88,10 +88,21 @@ export const getAuthTokens = async () => readStoredTokens();
 
 const parseResponse = async (response) => {
 	const text = await response.text();
-	const data = text ? JSON.parse(text) : null;
+	let data;
+	try {
+		data = text ? JSON.parse(text) : null;
+	} catch (e) {
+		// Nếu không phải JSON, có thể là lỗi 404/500 dạng HTML
+		const snippet = text ? text.slice(0, 100) : '(empty)';
+		console.error('Lỗi phân giải JSON từ Server:', snippet);
+		const error = new Error(`Server trả về dữ liệu không hợp lệ (Bắt đầu bằng: ${snippet}). Vui lòng thử lại sau.`);
+		error.status = response.status;
+		error.rawResponse = text;
+		throw error;
+	}
 
 	if (!response.ok) {
-		const message = data?.message || data?.error || 'Request failed';
+		const message = data?.message || data?.error || 'Yêu cầu thất bại';
 		const error = new Error(message);
 		error.status = response.status;
 		error.data = data;

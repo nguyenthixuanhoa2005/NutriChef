@@ -307,3 +307,37 @@ create table recommendation_log ( --cai bang nay no chinh la bang goi y
 
 
 select * from ingredient;
+
+-- Add equipped_title to app_user
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS equipped_title VARCHAR(100);
+
+-- Table for achievement definitions
+CREATE TABLE IF NOT EXISTS achievement (
+    achievement_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    criteria_type VARCHAR(50) NOT NULL, -- RECIPE_COUNT, REVIEW_COUNT, FAVORITE_COUNT, MEAL_SET_COUNT
+    criteria_value INT NOT NULL,
+    title_reward VARCHAR(100),
+    icon_url VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table to track user progress and completion
+CREATE TABLE IF NOT EXISTS user_achievement (
+    user_id INT REFERENCES app_user(user_id) ON DELETE CASCADE,
+    achievement_id INT REFERENCES achievement(achievement_id) ON DELETE CASCADE,
+    progress INT DEFAULT 0,
+    is_completed BOOLEAN DEFAULT FALSE,
+    completed_at TIMESTAMP,
+    PRIMARY KEY (user_id, achievement_id)
+);
+
+-- Seed achievements
+INSERT INTO achievement (name, description, criteria_type, criteria_value, title_reward) VALUES
+('Người mới vào bếp', 'Đăng tải 1 công thức được duyệt', 'RECIPE_COUNT', 1, 'Tập sự đầu bếp'),
+('Đầu bếp nghiệp dư', 'Đăng tải 5 công thức được duyệt', 'RECIPE_COUNT', 5, 'Đầu bếp nghiệp dư'),
+('Vua đầu bếp', 'Đăng tải 20 công thức được duyệt', 'RECIPE_COUNT', 20, 'Vua đầu bếp'),
+('Người đánh giá tận tâm', 'Gửi 5 đánh giá cho các công thức', 'REVIEW_COUNT', 5, 'Chuyên gia phê bình'),
+('Kẻ sành ăn', 'Lưu 10 công thức vào mục yêu thích', 'FAVORITE_COUNT', 10, 'Kẻ sành ăn'),
+('Chuyên gia lên thực đơn', 'Lưu 5 mâm cơm yêu thích', 'MEAL_SET_COUNT', 5, 'Kiến trúc sư món ăn');

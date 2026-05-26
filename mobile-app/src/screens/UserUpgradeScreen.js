@@ -94,6 +94,7 @@ export default function UserUpgradeScreen({
   onNavigateRecipeSubmission,
   onNavigateFavorites,
   onNavigateShopping,
+  onAchievementPress,
 }) {
   const [user, setUser] = useState(initialUser);
   const [plans, setPlans] = useState([]);
@@ -262,6 +263,7 @@ export default function UserUpgradeScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onLogout}
       />
       

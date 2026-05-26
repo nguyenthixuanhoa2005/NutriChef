@@ -82,6 +82,7 @@ export default function UserFavoritesScreen({
   onNavigateUpgrade,
   onNavigateShopping,
   onOpenRecipeDetail,
+  onAchievementPress,
 }) {
   const [activeTab, setActiveTab] = useState('recipes');
   const [loading, setLoading] = useState(false);
@@ -418,6 +419,7 @@ export default function UserFavoritesScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onRequestLogout}
       />
 

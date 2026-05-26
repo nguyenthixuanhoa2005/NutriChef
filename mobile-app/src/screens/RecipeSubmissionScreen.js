@@ -145,6 +145,7 @@ export default function RecipeSubmissionScreen({
   onNavigateFavorites,
   onNavigateUpgrade,
   onNavigateShopping,
+  onAchievementPress,
   onRequestLogout,
 }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -281,6 +282,7 @@ export default function RecipeSubmissionScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onRequestLogout}
       />
 

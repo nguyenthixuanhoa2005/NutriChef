@@ -350,6 +350,7 @@ export default function UserMealSetScreen({
   onNavigateUpgrade,
   onNavigateShopping,
   onOpenRecipeDetail,
+  onAchievementPress,
 }) {
   const [mealTime, setMealTime] = useState(() => cachedMealScreenState?.mealTime || 'lunch');
   const [mealGoal, setMealGoal] = useState(() => cachedMealScreenState?.mealGoal || 'maintain');
@@ -990,6 +991,7 @@ export default function UserMealSetScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onRequestLogout}
       />
 

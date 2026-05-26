@@ -16,6 +16,7 @@ import AdminTransactionsScreen from './src/screens/AdminTransactionsScreen';
 import RecipeSubmissionScreen from './src/screens/RecipeSubmissionScreen';
 import RecipeDetailScreen from './src/screens/RecipeDetailScreen';
 import UserUpgradeScreen from './src/screens/UserUpgradeScreen';
+import AchievementScreen from './src/screens/AchievementScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import { bootstrapAuthSession, logout } from './src/services/authApi';
@@ -328,6 +329,7 @@ export default function App() {
           onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
           onNavigateFavorites={() => setActiveScreen('favorites')}
           onNavigateShopping={handleShoppingTabPress}
+          onAchievementPress={() => navigateTo('achievements')}
         />
       );
     }
@@ -349,6 +351,7 @@ export default function App() {
           onNavigateShopping={handleShoppingTabPress}
           onOpenRecipeDetail={handleOpenRecipeDetail}
           onGoBack={() => goBack('home')}
+          onAchievementPress={() => navigateTo('achievements')}
           onRequestLogout={handleLogout}
         />
       );
@@ -369,6 +372,7 @@ export default function App() {
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onNavigateShopping={handleShoppingTabPress}
           onOpenRecipeDetail={handleOpenRecipeDetail}
+          onAchievementPress={() => navigateTo('achievements')}
           onRequestLogout={handleLogout}
         />
       );
@@ -388,6 +392,7 @@ export default function App() {
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onNavigateShopping={handleShoppingTabPress}
+          onAchievementPress={() => navigateTo('achievements')}
           onRequestLogout={handleLogout}
         />
       );
@@ -407,6 +412,7 @@ export default function App() {
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onNavigateShopping={handleShoppingTabPress}
           onOpenRecipeDetail={handleOpenRecipeDetail}
+          onAchievementPress={() => navigateTo('achievements')}
           onRequestLogout={handleLogout}
         />
       );
@@ -425,6 +431,7 @@ export default function App() {
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onNavigateShopping={handleShoppingTabPress}
+          onAchievementPress={() => navigateTo('achievements')}
           onRequestLogout={handleLogout}
         />
       );
@@ -452,6 +459,22 @@ export default function App() {
       );
     }
 
+    if (activeScreen === 'achievements') {
+      return (
+        <AchievementScreen
+          user={currentUser}
+          onBack={() => navigateTo('home')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
+          onNavigateFavorites={() => navigateTo('favorites')}
+          onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
     return (
       <HomeScreen
         onLoginPress={() => navigateTo('login')}
@@ -464,6 +487,7 @@ export default function App() {
         onNavigateUpgrade={() => navigateTo('upgrade')}
         onNavigateShopping={handleShoppingTabPress}
         onOpenRecipeDetail={handleOpenRecipeDetail}
+        onAchievementPress={() => navigateTo('achievements')}
         isGuest={!currentUser}
         user={currentUser}
         usageCount={usageCount}

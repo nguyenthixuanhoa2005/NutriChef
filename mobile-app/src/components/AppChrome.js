@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const USER_NAV_ITEMS = [
@@ -133,7 +133,8 @@ export function AppAccountMenu({
   visible, 
   onClose, 
   user, 
-  onLogout 
+  onLogout,
+  onAchievementPress
 }) {
   const displayName = user?.fullName || user?.name || 'Người dùng';
   const displayEmail = user?.email || 'user@nutrichef.app';
@@ -152,20 +153,23 @@ export function AppAccountMenu({
             <Text style={styles.menuEmail}>{displayEmail}</Text>
           </View>
 
-          <Pressable
-            style={styles.menuRow}
-            onPress={() => {
-              onClose();
-              Alert.alert('Tài khoản', 'Tính năng cài đặt sẽ được bổ sung sau.');
-            }}
-          >
-            <View style={styles.menuIconWrap}>
-              <Feather name="settings" size={18} color="#6b7280" />
-            </View>
-            <Text style={styles.menuText}>Cài đặt tài khoản</Text>
-          </Pressable>
+          {onAchievementPress && (
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                onClose();
+                onAchievementPress?.();
+              }}
+            >
+              <View style={styles.menuIconWrap}>
+                <Feather name="award" size={18} color="#f97316" />
+              </View>
+              <Text style={styles.menuText}>Thành tựu</Text>
+            </Pressable>
+          )}
 
           <Pressable
+
             style={styles.menuRow}
             onPress={() => {
               onClose();
@@ -488,5 +492,147 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#ef4444',
+  },
+  achievementsContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  achievementsContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  achievementsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  achievementsTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  achievementsSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementsScroll: {
+    padding: 20,
+  },
+  premiumBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginBottom: 20,
+    gap: 12,
+  },
+  premiumIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumBadgeInfo: {
+    flex: 1,
+  },
+  premiumBadgeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  premiumBadgeDesc: {
+    fontSize: 13,
+    color: '#b45309',
+    marginTop: 1,
+  },
+  achievementCard: {
+    flexDirection: 'row',
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    gap: 16,
+  },
+  achievementCardCompleted: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d1fae5',
+    borderWidth: 1,
+    shadowColor: '#10b981',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  achievementIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  achievementIconWrapCompleted: {
+    backgroundColor: '#10b981',
+  },
+  achievementInfo: {
+    flex: 1,
+  },
+  achievementRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  achievementName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  achievementProgressText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6b7280',
+  },
+  achievementDesc: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 4,
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#f97316',
+  },
+  progressBarFillCompleted: {
+    backgroundColor: '#10b981',
   },
 });

@@ -170,6 +170,7 @@ export default function HomeScreen({
   onNavigateUpgrade,
   onNavigateShopping,
   onOpenRecipeDetail,
+  onAchievementPress,
   isGuest,
   user,
   usageCount,
@@ -365,6 +366,7 @@ export default function HomeScreen({
         onClose={() => setMenuOpen(false)}
         user={user}
         onLogout={onRequestLogout}
+        onAchievementPress={onAchievementPress}
       />
 
       <FlatList
@@ -384,7 +386,14 @@ export default function HomeScreen({
             <View style={styles.welcomeRow}>
               <View>
                 <Text style={styles.greetingText}>Chào {user?.full_name?.split(' ')[0] || 'bạn'},</Text>
-                <Text style={styles.welcomeSubText}>Bạn muốn nấu món gì hôm nay?</Text>
+                {user?.equippedTitle ? (
+                  <View style={styles.titleBadge}>
+                    <MaterialCommunityIcons name="shield-check" size={14} color="#f55f12" />
+                    <Text style={styles.titleText}>{user.equippedTitle}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.welcomeSubText}>Bạn muốn nấu món gì hôm nay?</Text>
+                )}
               </View>
               <Pressable onPress={onNavigateUpgrade} style={styles.premiumBadgeHeader}>
                 <MaterialCommunityIcons name="crown" size={20} color="#f59e0b" />
@@ -488,6 +497,25 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '600',
     marginTop: 2,
+  },
+  titleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  titleText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#f55f12',
+    textTransform: 'uppercase',
   },
   premiumBadgeHeader: {
     width: 44,

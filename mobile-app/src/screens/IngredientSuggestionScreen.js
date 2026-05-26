@@ -204,6 +204,8 @@ export default function IngredientSuggestionScreen({
   onNavigateFavorites,
   onNavigateUpgrade,
   onNavigateShopping,
+  onOpenRecipeDetail,
+  onAchievementPress,
   onRequestLogout,
 }) {
   const [recording, setRecording] = useState();
@@ -1159,7 +1161,10 @@ export default function IngredientSuggestionScreen({
 
     return (
       <View style={styles.recipeDetailCard}>
-        <View style={styles.recipeHeroWrap}>
+        <Pressable 
+          style={styles.recipeHeroWrap}
+          onPress={() => onOpenRecipeDetail?.(currentRecipe.recipe_id)}
+        >
           <Image source={{ uri: resolveRecipeImage(currentRecipe.image_url) }} style={styles.recipeHeroImage} />
           <View style={styles.recipeImageActions}>
             <Pressable
@@ -1178,8 +1183,22 @@ export default function IngredientSuggestionScreen({
               <Feather name="share-2" size={18} color="#344054" />
             </Pressable>
           </View>
+        </Pressable>
+        
+        <View style={styles.recipeDetailHeader}>
+          <Pressable 
+            style={{ flex: 1 }}
+            onPress={() => onOpenRecipeDetail?.(currentRecipe.recipe_id)}
+          >
+            <Text style={styles.recipeDetailTitle}>{currentRecipe.title}</Text>
+          </Pressable>
+          <Pressable 
+            onPress={() => onOpenRecipeDetail?.(currentRecipe.recipe_id)}
+            style={styles.viewDetailFullBtn}
+          >
+            <Feather name="eye" size={20} color="#60a5fa" />
+          </Pressable>
         </View>
-        <Text style={styles.recipeDetailTitle}>{currentRecipe.title}</Text>
 
         <View style={styles.recipeMetaRow}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1271,6 +1290,7 @@ export default function IngredientSuggestionScreen({
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         user={user}
+        onAchievementPress={onAchievementPress}
         onLogout={onRequestLogout}
       />
 
@@ -1740,6 +1760,22 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     color: '#111827',
+  },
+  recipeDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  viewDetailFullBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   recipeMetaRow: {
     marginTop: 8,

@@ -716,11 +716,12 @@ app.get('/api/ingredients', async (req, res) => {
 // --- API 5: PUBLIC - TRENDING RECIPES FOR HOME ---
 app.get('/api/recipes/trending', async (req, res) => {
     try {
+        const { dishType } = req.query;
         const parsedLimit = Number(req.query.limit || 20);
         const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 && parsedLimit <= 100 ? parsedLimit : 20;
 
-        const result = await db.query(
-            `SELECT
+        let query = `
+            SELECT
                 r.recipe_id,
                 r.title,
                 r.description,
@@ -733,20 +734,31 @@ app.get('/api/recipes/trending', async (req, res) => {
                 COALESCE(ROUND(AVG(rt.score)::numeric, 1), 0) AS avg_rating,
                 COUNT(DISTINCT rt.rating_id) AS rating_count,
                 COUNT(DISTINCT fr.user_id) AS like_count
-             FROM recipe r
-             LEFT JOIN app_user u ON u.user_id = r.author_id
-             LEFT JOIN rating rt ON rt.recipe_id = r.recipe_id
-             LEFT JOIN favorite_recipe fr ON fr.recipe_id = r.recipe_id
-             WHERE r.status = 'APPROVED'
-             GROUP BY r.recipe_id, u.full_name
-             ORDER BY 
+            FROM recipe r
+            LEFT JOIN app_user u ON u.user_id = r.author_id
+            LEFT JOIN rating rt ON rt.recipe_id = r.recipe_id
+            LEFT JOIN favorite_recipe fr ON fr.recipe_id = r.recipe_id
+            WHERE r.status = 'APPROVED'
+        `;
+
+        const queryParams = [];
+        if (dishType) {
+            query += ` AND r.dish_type = $1`;
+            queryParams.push(dishType.toUpperCase());
+        }
+
+        query += `
+            GROUP BY r.recipe_id, u.full_name
+            ORDER BY 
                 (CASE WHEN r.created_at >= NOW() - INTERVAL '48 hours' THEN 1 ELSE 0 END) DESC,
                 avg_rating DESC, 
                 like_count DESC, 
                 r.recipe_id DESC
-             LIMIT $1`,
-            [limit]
-        );
+            LIMIT $${queryParams.length + 1}
+        `;
+        queryParams.push(limit);
+
+        const result = await db.query(query, queryParams);
 
         res.json({
             status: 'success',

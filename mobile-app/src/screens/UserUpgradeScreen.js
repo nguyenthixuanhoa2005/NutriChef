@@ -404,7 +404,7 @@ export default function UserUpgradeScreen({
               Chúc mừng bạn đã trở thành hội viên Premium của NutriChef. Hãy tận hưởng các đặc quyền dành riêng cho bạn!
             </Text>
             <Pressable style={styles.successBtn} onPress={handleCloseSuccess}>
-              <Text style={styles.successBtnText}>BẮT ĐẦU TRẢI NGHIỆM</Text>
+              <Text style={styles.successBtnText} numberOfLines={1}>Bắt đầu trải nghiệm</Text>
             </Pressable>
           </View>
         </View>
@@ -686,9 +686,8 @@ const styles = StyleSheet.create({
   },
   successBtnText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 1,
   },
 });
 

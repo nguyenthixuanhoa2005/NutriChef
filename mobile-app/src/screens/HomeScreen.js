@@ -8,6 +8,7 @@ import {
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -44,6 +45,7 @@ const mapRecipeRow = (row, isGuest) => ({
   premium: Boolean(isGuest),
   image: row.image_url || FALLBACK_RECIPE_IMAGE,
   isFavorite: false,
+  dishType: row.dish_type, // Thêm dishType để lọc
 });
 
 const RecipeCard = ({
@@ -65,82 +67,75 @@ const RecipeCard = ({
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.imageWrap}>
-        <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
-
-        <Pressable
-          style={[styles.favoriteFab, recipe.isFavorite && styles.favoriteFabActive]}
-          onPress={() => {
-            if (!guardPress()) {
-              return;
-            }
-            onToggleFavorite?.(recipe.id);
-          }}
-          disabled={favoritePending}
-        >
-          <Feather name="heart" size={20} color={recipe.isFavorite ? '#ffffff' : '#4b5563'} />
-        </Pressable>
-
-        <View style={styles.ratingChip}>
-          <MaterialCommunityIcons name="star" size={15} color="#fbbf24" />
-          <Text style={styles.ratingText}>{recipe.rating}</Text>
+    <Pressable 
+      style={styles.premiumCard}
+      onPress={() => {
+        if (!guardPress()) return;
+        onViewDetail?.(recipe.id);
+      }}
+    >
+      <Image source={{ uri: recipe.image }} style={styles.premiumImage} />
+      
+      {/* Top Controls */}
+      <View style={styles.premiumTopRow}>
+        <View style={styles.premiumRatingBadge}>
+          <MaterialCommunityIcons name="star" size={14} color="#fbbf24" />
+          <Text style={styles.premiumRatingText}>{recipe.rating}</Text>
         </View>
-
-        {recipe.premium ? (
-          <View style={styles.lockBanner}>
-            <Feather name="lock" size={13} color="#ffffff" />
-            <Text style={styles.lockText}>Đăng ký để xem chi tiết dinh dưỡng</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.cardBody}>
-        <Text style={styles.recipeTitle}>{recipe.title}</Text>
-        <Text style={styles.recipeAuthor}>Bởi {recipe.author}</Text>
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaLeft}>
-            <MaterialCommunityIcons name="clock-time-four-outline" size={15} color="#6b7280" />
-            <Text style={styles.metaText}>{recipe.timeLabel}</Text>
-          </View>
-          <View style={styles.metaLeft}>
-            <Feather name="eye" size={15} color="#6b7280" />
-            <Text style={styles.metaText}>{recipe.views}</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.engagementRow}>
-          <View style={styles.metaLeft}>
-            <Feather name="heart" size={16} color="#6b7280" />
-            <Text style={styles.metaText}>{formatNumber(recipe.likeCount)}</Text>
-          </View>
+        
+        <View style={styles.premiumActionGroup}>
           <Pressable
-            onPress={() => {
+            style={[styles.premiumCircleBtn, recipe.isFavorite && styles.premiumFavActive]}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (!guardPress()) return;
+              onToggleFavorite?.(recipe.id);
+            }}
+            disabled={favoritePending}
+          >
+            <Feather 
+              name="heart" 
+              size={18} 
+              color={recipe.isFavorite ? '#ffffff' : '#1e293b'} 
+            />
+          </Pressable>
+          
+          <Pressable
+            style={styles.premiumCircleBtn}
+            onPress={(e) => {
+              e.stopPropagation();
               onShare?.(recipe);
             }}
           >
-            <Feather name="share-2" size={17} color="#6b7280" />
+            <Feather name="share-2" size={18} color="#1e293b" />
           </Pressable>
         </View>
-
-        <Pressable
-          style={styles.ctaButton}
-          onPress={() => {
-            if (!guardPress()) {
-              return;
-            }
-            onViewDetail?.(recipe.id);
-          }}
-        >
-          <Text style={styles.ctaButtonText}>Xem công thức</Text>
-        </Pressable>
       </View>
-    </View>
+
+      {/* Bottom Info Overlay */}
+      <View style={styles.premiumOverlay}>
+        <View style={styles.premiumTextContent}>
+          <Text style={styles.premiumTitle} numberOfLines={1}>{recipe.title}</Text>
+          <View style={styles.premiumAuthorRow}>
+            <MaterialCommunityIcons name="account-circle-outline" size={14} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.premiumAuthorText}>{recipe.author}</Text>
+          </View>
+        </View>
+        <View style={styles.premiumTimeBadge}>
+          <Feather name="clock" size={12} color="#fff" />
+          <Text style={styles.premiumTimeText}>{recipe.timeLabel}</Text>
+        </View>
+      </View>
+    </Pressable>
   );
 };
+
+const CATEGORIES = [
+  { id: 'all', label: 'Tất cả', icon: 'food-variant' },
+  { id: 'main', label: 'Món chính', icon: 'food-drumstick' },
+  { id: 'side', label: 'Món phụ', icon: 'food-apple' },
+  { id: 'dessert', label: 'Tráng miệng', icon: 'ice-cream' },
+];
 
 export default function HomeScreen({
   onLoginPress,
@@ -162,11 +157,18 @@ export default function HomeScreen({
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
   const [favoritePendingId, setFavoritePendingId] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('all');
 
   const fetchTrendingRecipes = useCallback(async () => {
     try {
       setLoadingRecipes(true);
-      const data = await request('/api/recipes/trending?limit=20');
+      
+      let apiUrl = '/api/recipes/trending?limit=20';
+      if (activeCategory === 'main') apiUrl += '&dishType=MAIN_DISH';
+      else if (activeCategory === 'side') apiUrl += '&dishType=SIDE_DISH';
+      else if (activeCategory === 'dessert') apiUrl += '&dishType=DESSERT';
+
+      const data = await request(apiUrl);
       const rows = Array.isArray(data?.recipes) ? data.recipes : [];
       const mapped = rows.map((row) => mapRecipeRow(row, isGuest));
 
@@ -203,7 +205,7 @@ export default function HomeScreen({
     } finally {
       setLoadingRecipes(false);
     }
-  }, [isGuest]);
+  }, [isGuest, activeCategory]);
 
   useEffect(() => {
     fetchTrendingRecipes();
@@ -350,37 +352,73 @@ export default function HomeScreen({
       <FlatList
         data={loadingRecipes ? [] : filteredRecipes}
         keyExtractor={(item) => String(item.id)}
+        numColumns={2}
+        columnWrapperStyle={styles.gridRow}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        initialNumToRender={4}
-        maxToRenderPerBatch={4}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
         windowSize={7}
         removeClippedSubviews
         ListHeaderComponent={(
           <View style={styles.listHeader}>
-            <View style={styles.searchCard}>
-              <View style={styles.searchWrap}>
-                <Feather name="search" size={20} color="#9ca3af" />
-                <TextInput
-                  placeholder="Tìm kiếm công thức..."
-                  placeholderTextColor="#9ca3af"
-                  style={styles.searchInput}
-                  value={searchText}
-                  onChangeText={setSearchText}
-                  editable={!isGuest}
-                  onFocus={() => {
-                    if (isGuest) {
-                      Keyboard.dismiss();
-                      promptLogin();
-                    }
-                  }}
-                />
+            <View style={styles.welcomeRow}>
+              <View>
+                <Text style={styles.greetingText}>Chào {user?.full_name?.split(' ')[0] || 'bạn'},</Text>
+                <Text style={styles.welcomeSubText}>Bạn muốn nấu món gì hôm nay?</Text>
               </View>
+              <Pressable onPress={onNavigateUpgrade} style={styles.premiumBadgeHeader}>
+                <MaterialCommunityIcons name="crown" size={20} color="#f59e0b" />
+              </Pressable>
             </View>
 
+            <View style={styles.searchBarFloating}>
+              <Feather name="search" size={18} color="#94a3b8" />
+              <TextInput
+                placeholder="Tìm công thức, tác giả..."
+                placeholderTextColor="#94a3b8"
+                style={styles.searchInputPremium}
+                value={searchText}
+                onChangeText={setSearchText}
+                editable={!isGuest}
+                onFocus={() => { if (isGuest) { Keyboard.dismiss(); promptLogin(); } }}
+              />
+              {searchText.length > 0 && (
+                <Pressable onPress={() => setSearchText('')}>
+                  <Feather name="x-circle" size={16} color="#cbd5e1" />
+                </Pressable>
+              )}
+            </View>
+
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.categoriesScroll}
+            >
+              {CATEGORIES.map(cat => (
+                <Pressable 
+                  key={cat.id} 
+                  onPress={() => setActiveCategory(cat.id)}
+                  style={[styles.categoryBtn, activeCategory === cat.id && styles.categoryBtnActive]}
+                >
+                  <MaterialCommunityIcons 
+                    name={cat.icon} 
+                    size={18} 
+                    color={activeCategory === cat.id ? '#fff' : '#64748b'} 
+                  />
+                  <Text style={[styles.categoryLabel, activeCategory === cat.id && styles.categoryLabelActive]}>
+                    {cat.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Công thức thịnh hành</Text>
+              <Text style={styles.sectionTitle}>Gợi ý cho bạn</Text>
+              <Pressable>
+                <Text style={styles.seeAllText}>Xem tất cả</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -429,57 +467,107 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef1f5',
   },
   content: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingTop: 12,
     paddingBottom: 28,
   },
+  gridRow: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
   listHeader: {
-    marginBottom: 14,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  cardSpacer: {
-    height: 14,
+  welcomeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 10,
   },
-  searchCard: {
-    backgroundColor: '#ffffff',
+  greetingText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  welcomeSubText: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  premiumBadgeHeader: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    padding: 14,
+    backgroundColor: '#fff7ed',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#111827',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  searchWrap: {
-    minHeight: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#f9fafb',
-    paddingHorizontal: 12,
+  searchBarFloating: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 6,
+    marginBottom: 24,
   },
-  searchInput: {
+  searchInputPremium: {
     flex: 1,
-    color: '#111827',
     fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  categoriesScroll: {
+    paddingBottom: 24,
+    gap: 12,
+  },
+  categoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  categoryBtnActive: {
+    backgroundColor: '#1e293b',
+    borderColor: '#1e293b',
+  },
+  categoryLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  categoryLabelActive: {
+    color: '#fff',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1e293b',
   },
   seeAllText: {
-    color: '#f55f12',
+    color: '#f97316',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -490,141 +578,102 @@ const styles = StyleSheet.create({
   },
   emptyWrap: {
     minHeight: 140,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbe1ea',
-    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   emptyText: {
-    color: '#64748b',
-    fontSize: 14,
+    color: '#94a3b8',
+    fontSize: 15,
     fontWeight: '600',
   },
-  card: {
+  premiumCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 24,
+    height: 280,
+    width: '48.5%',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#111827',
-    shadowOpacity: 0.09,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  imageWrap: {
-    position: 'relative',
-    height: 188,
-    backgroundColor: '#d1d5db',
-  },
-  recipeImage: {
-    width: '100%',
-    height: '100%',
-  },
-  favoriteFab: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteFabActive: {
-    backgroundColor: '#ef4444',
-  },
-  ratingChip: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    minHeight: 34,
-    borderRadius: 17,
-    backgroundColor: '#f9fafb',
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    color: '#111827',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  lockBanner: {
-    position: 'absolute',
-    left: 10,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(17, 24, 39, 0.6)',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 9,
-  },
-  lockText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  cardBody: {
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 14,
-  },
-  recipeTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
+    elevation: 8,
     marginBottom: 4,
   },
-  recipeAuthor: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 10,
+  premiumImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
   },
-  metaRow: {
+  premiumTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 12,
+    alignItems: 'flex-start',
+  },
+  premiumRatingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
+    gap: 4,
   },
-  metaLeft: {
+  premiumRatingText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  premiumActionGroup: {
+    gap: 8,
+  },
+  premiumCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumFavActive: {
+    backgroundColor: '#ef4444',
+  },
+  premiumOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingTop: 40,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  premiumTextContent: {
+    flex: 1,
+    gap: 4,
+  },
+  premiumTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#ffffff',
+    lineHeight: 22,
+  },
+  premiumAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  metaText: {
-    fontSize: 15,
-    color: '#374151',
+  premiumAuthorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginBottom: 10,
-  },
-  engagementRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  ctaButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: '#f55f12',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaButtonText: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: '700',
+  premiumTimeBadge: {
+    display: 'none',
   },
   menuBackdrop: {
     flex: 1,

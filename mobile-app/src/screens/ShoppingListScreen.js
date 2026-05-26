@@ -3,10 +3,12 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +48,12 @@ export default function ShoppingListScreen({
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  
+  // States for manual adding
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState('');
+  const [newItemUnit, setNewItemUnit] = useState('');
 
   useEffect(() => {
     loadShoppingList();
@@ -70,6 +78,41 @@ export default function ShoppingListScreen({
     } catch (e) {
       console.error('Failed to save shopping list', e);
     }
+  };
+
+  const addItemManually = () => {
+    if (!newItemName.trim()) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên nguyên liệu.');
+      return;
+    }
+
+    // Kiểm tra số lượng nếu người dùng có nhập
+    if (newItemQty.trim()) {
+      const qtyNum = parseFloat(newItemQty);
+      if (isNaN(qtyNum) || qtyNum <= 0) {
+        Alert.alert('Số lượng không hợp lệ', 'Vui lòng nhập số lượng lớn hơn 0.');
+        return;
+      }
+    }
+
+    const newItem = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+      name: newItemName.trim(),
+      qty: newItemQty.trim(),
+      unit: newItemUnit.trim(),
+      recipeTitle: 'Tự thêm',
+      checked: false,
+    };
+
+    const newList = [newItem, ...list];
+    setList(newList);
+    saveShoppingList(newList);
+    
+    // Reset form
+    setNewItemName('');
+    setNewItemQty('');
+    setNewItemUnit('');
+    setModalVisible(false);
   };
 
   const toggleItem = (id) => {
@@ -129,7 +172,7 @@ export default function ShoppingListScreen({
       </Pressable>
       <View style={styles.itemContent}>
         <Text style={[styles.itemName, item.checked && styles.itemNameChecked]}>
-          {item.name}
+          {item.name}{item.qty ? ` (${item.qty} ${item.unit || ''})` : ''}
         </Text>
         {item.recipeTitle && (
           <Text style={styles.itemSource}>Món: {item.recipeTitle}</Text>
@@ -161,21 +204,29 @@ export default function ShoppingListScreen({
 
       <View style={styles.container}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Danh sách đi chợ</Text>
-          {list.some(i => i.checked) && (
-            <Pressable onPress={clearChecked} style={styles.clearBtn}>
-              <Text style={styles.clearBtnText}>Xóa mục đã chọn</Text>
+          <Text style={[styles.title, { fontWeight: '800' }]}>Giỏ hàng</Text>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => setModalVisible(true)} style={styles.addBtnHeader}>
+              <Feather name="plus-circle" size={20} color="#f97316" />
             </Pressable>
-          )}
+            {list.some(i => i.checked) && (
+              <Pressable onPress={clearChecked} style={styles.clearBtn}>
+                <Text style={styles.clearBtnText}>Xóa đã chọn</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {loading ? (
           <ActivityIndicator size="large" color="#f97316" style={{ marginTop: 40 }} />
         ) : list.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="basket-outline" size={64} color="#cbd5e1" />
-            <Text style={styles.emptyText}>Chưa có nguyên liệu nào trong danh sách.</Text>
-            <Text style={styles.emptySubText}>Thêm nguyên liệu từ các công thức món ăn để bắt đầu đi chợ nhé!</Text>
+            <MaterialCommunityIcons name="cart-outline" size={64} color="#cbd5e1" />
+            <Text style={styles.emptyText}>Chưa có nguyên liệu nào trong giỏ hàng.</Text>
+            <Text style={styles.emptySubText}>Thêm nguyên liệu từ các công thức món ăn hoặc bấm dấu + để tự thêm nhé!</Text>
+            <Pressable onPress={() => setModalVisible(true)} style={styles.emptyAddBtn}>
+              <Text style={styles.emptyAddBtnText}>Thêm thủ công ngay</Text>
+            </Pressable>
           </View>
         ) : (
           <FlatList
@@ -186,6 +237,63 @@ export default function ShoppingListScreen({
           />
         )}
       </View>
+
+      {/* Manual Add Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thêm nguyên liệu</Text>
+              <Pressable onPress={() => setModalVisible(false)}>
+                <Feather name="x" size={22} color="#64748b" />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Tên nguyên liệu *</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Ví dụ: Thịt bò, Cà chua..."
+                  value={newItemName}
+                  onChangeText={setNewItemName}
+                />
+              </View>
+
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Số lượng</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Ví dụ: 500, 2..."
+                    value={newItemQty}
+                    onChangeText={setNewItemQty}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Đơn vị</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Ví dụ: g, quả, kg..."
+                    value={newItemUnit}
+                    onChangeText={setNewItemUnit}
+                  />
+                </View>
+              </View>
+
+              <Pressable onPress={addItemManually} style={styles.submitBtn}>
+                <Text style={styles.submitBtnText}>Thêm vào giỏ</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <AppBottomNav
         activeKey="shopping"
@@ -213,10 +321,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   title: {
     fontFamily: FONT_BOLD,
     fontSize: 24,
     color: '#0f172a',
+  },
+  addBtnHeader: {
+    padding: 4,
   },
   clearBtn: {
     paddingVertical: 4,
@@ -291,5 +407,89 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+  emptyAddBtn: {
+    marginTop: 20,
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 99,
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+  },
+  emptyAddBtnText: {
+    color: '#f97316',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: FONT_BOLD,
+    color: '#0f172a',
+  },
+  modalBody: {
+    padding: 16,
+    gap: 16,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  textInput: {
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: '#1e293b',
+    backgroundColor: '#f8fafc',
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  submitBtn: {
+    backgroundColor: '#f97316',
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

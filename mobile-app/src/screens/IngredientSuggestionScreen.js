@@ -815,7 +815,7 @@ export default function IngredientSuggestionScreen({
     }
   };
 
-  const addToShoppingList = async (ingredientName, recipeTitle) => {
+  const addToShoppingList = async (ingredientName, recipeTitle, qty, unit) => {
     try {
       const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
       let list = saved ? JSON.parse(saved) : [];
@@ -824,12 +824,14 @@ export default function IngredientSuggestionScreen({
         id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
         name: ingredientName,
         recipeTitle: recipeTitle,
+        qty: qty,
+        unit: unit,
         checked: false,
       };
 
       list.push(newItem);
       await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
-      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào danh sách đi chợ.`);
+      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào giỏ hàng.`);
     } catch (e) {
       console.error('Failed to add to shopping list', e);
     }
@@ -889,7 +891,7 @@ export default function IngredientSuggestionScreen({
 
               {!isChecked && (
                 <Pressable 
-                  onPress={() => addToShoppingList(ing.name, recipe.title)}
+                  onPress={() => addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit)}
                   style={styles.ingAddBtn}
                 >
                   <Feather name="plus-circle" size={20} color="#f97316" />

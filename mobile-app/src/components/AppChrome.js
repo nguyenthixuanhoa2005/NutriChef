@@ -20,8 +20,8 @@ const USER_NAV_ITEMS = [
   },
   {
     key: 'shopping',
-    label: 'Đi chợ',
-    icon: { family: MaterialCommunityIcons, name: 'basket-outline' },
+    label: 'Giỏ',
+    icon: { family: MaterialCommunityIcons, name: 'cart-outline' },
   },
   {
     key: 'recipes',

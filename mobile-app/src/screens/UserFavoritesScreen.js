@@ -94,6 +94,7 @@ export default function UserFavoritesScreen({
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
   const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [recipeId]: { [ingName]: boolean } }
   const [fetchingRecipeId, setFetchingRecipeId] = useState(null);
+  const [shoppingList, setShoppingList] = useState([]); // Persistent shopping list for sync
 
   const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
 
@@ -177,7 +178,19 @@ export default function UserFavoritesScreen({
 
   useEffect(() => {
     loadFavorites();
+    loadShoppingListForSync();
   }, [loadFavorites]);
+
+  const loadShoppingListForSync = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      if (saved) {
+        setShoppingList(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load shopping list for sync', e);
+    }
+  };
 
   const recipeCountText = useMemo(() => {
     return `${favoriteRecipes.length} công thức`;
@@ -250,8 +263,8 @@ export default function UserFavoritesScreen({
     const statusMap = localIngredientStatus[recipe.recipe_id] || {};
     
     const sorted = [...rawIngredients].sort((a, b) => {
-      const aChecked = statusMap[a.name] || false;
-      const bChecked = statusMap[b.name] || false;
+      const aChecked = statusMap[a.name] || shoppingList.some(c => c.name.toLowerCase() === a.name.toLowerCase() && c.checked);
+      const bChecked = statusMap[b.name] || shoppingList.some(c => c.name.toLowerCase() === b.name.toLowerCase() && c.checked);
       if (aChecked === bChecked) return 0;
       return aChecked ? 1 : -1;
     });
@@ -260,7 +273,12 @@ export default function UserFavoritesScreen({
       <View style={styles.expandedIngredients}>
         <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
         {sorted.map((ing, idx) => {
-          const isChecked = statusMap[ing.name] || false;
+          const isBought = shoppingList.some(cartItem => 
+            cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
+            cartItem.checked
+          );
+          const isChecked = statusMap[ing.name] || isBought;
+          
           return (
             <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
               <Pressable 

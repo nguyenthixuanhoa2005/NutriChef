@@ -118,6 +118,7 @@ export default function RecipeDetailScreen({
   // New state for ingredient checklist
   const [expandedIngredients, setExpandedIngredients] = useState(false);
   const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [ingName]: boolean }
+  const [shoppingList, setShoppingList] = useState([]); // Persistent shopping list for sync
 
   const fetchRecipeDetail = useCallback(async () => {
     if (!recipeId) {
@@ -154,7 +155,19 @@ export default function RecipeDetailScreen({
 
   useEffect(() => {
     fetchRecipeDetail();
+    loadShoppingListForSync();
   }, [fetchRecipeDetail]);
+
+  const loadShoppingListForSync = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      if (saved) {
+        setShoppingList(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load shopping list for sync', e);
+    }
+  };
 
   const ingredients = useMemo(() => safeArray(recipe?.ingredients_json), [recipe]);
   const steps = useMemo(() => safeArray(recipe?.steps_json), [recipe]);
@@ -312,7 +325,12 @@ export default function RecipeDetailScreen({
     return (
       <View style={styles.expandedIngredients}>
         {sorted.map((ing, idx) => {
-          const isChecked = localIngredientStatus[ing.name] || false;
+          const isBought = shoppingList.some(cartItem => 
+            cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
+            cartItem.checked
+          );
+          const isChecked = localIngredientStatus[ing.name] || isBought;
+          
           return (
             <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
               <Pressable 

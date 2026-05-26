@@ -906,9 +906,28 @@ export default function IngredientSuggestionScreen({
       return aChecked ? 1 : -1;
     });
 
+    const allReady = rawIngredients.length > 0 && rawIngredients.every(ing => {
+      const isBought = shoppingList.some(cartItem => 
+        cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
+        cartItem.checked
+      );
+      return statusMap[ing.name] || isBought;
+    });
+
     return (
       <View style={styles.expandedIngredients}>
-        <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
+        <View style={styles.expandedHeaderRow}>
+          <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
+          {allReady && (
+            <Pressable 
+              onPress={() => onOpenRecipeDetail?.(recipe.recipe_id, { autoStartCooking: true })} 
+              style={styles.miniCookNowBtn}
+            >
+              <MaterialCommunityIcons name="fire" size={14} color="#fff" />
+              <Text style={styles.miniCookNowBtnText}>Nấu ngay</Text>
+            </Pressable>
+          )}
+        </View>
         {sorted.map((ing, idx) => {
           const isBought = shoppingList.some(cartItem => 
             cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
@@ -917,17 +936,18 @@ export default function IngredientSuggestionScreen({
           const isChecked = statusMap[ing.name] || isBought;
           
           return (
-            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
-              <Pressable 
-                onPress={() => toggleLocalIngredient(recipe.recipe_id, ing.name)}
-                style={styles.ingCheckbox}
-              >
+            <Pressable 
+              key={`${ing.name}-${idx}`} 
+              style={styles.ingredientRow}
+              onPress={() => toggleLocalIngredient(recipe.recipe_id, ing.name)}
+            >
+              <View style={styles.ingCheckbox}>
                 <MaterialCommunityIcons 
                   name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
                   size={20} 
                   color={isChecked ? '#94a3b8' : '#f97316'} 
                 />
-              </Pressable>
+              </View>
               
               <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
                 {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
@@ -935,13 +955,17 @@ export default function IngredientSuggestionScreen({
 
               {!isChecked && (
                 <Pressable 
-                  onPress={() => addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit);
+                  }}
                   style={styles.ingAddBtn}
+                  hitSlop={8}
                 >
                   <Feather name="plus-circle" size={20} color="#f97316" />
                 </Pressable>
               )}
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -1839,11 +1863,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  expandedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   expandedTitle: {
     fontSize: 14,
     fontFamily: FONT_BOLD,
     color: '#475569',
-    marginBottom: 8,
+  },
+  miniCookNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  miniCookNowBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   ingredientRow: {
     flexDirection: 'row',

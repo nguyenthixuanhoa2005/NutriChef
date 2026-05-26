@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
+  FlatList,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +21,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { authRequest, request } from '../services/client';
 import { AppBottomNav } from '../components/AppChrome';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
 const PREP_LIST_STORAGE_KEY = 'nutrichef_prep_status';
 
@@ -29,6 +34,13 @@ const FONT_BOLD = Platform.select({
   android: 'sans-serif-condensed',
   default: 'system-ui',
 });
+
+// Helper for countdown display
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value) || 0);
 
@@ -93,6 +105,7 @@ const dbCaloriesLabel = (value) => {
 
 export default function RecipeDetailScreen({
   recipeId,
+  autoStartCooking,
   isGuest = true,
   user,
   usageCount,
@@ -120,6 +133,15 @@ export default function RecipeDetailScreen({
   const [expandedIngredients, setExpandedIngredients] = useState(false);
   const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [ingName]: boolean }
   const [shoppingList, setShoppingList] = useState([]); // Persistent shopping list for sync
+
+  // --- Cooking Mode States ---
+  const [cookingModeVisible, setCookingModeVisible] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(true);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [showCookingGuide, setShowCookingGuide] = useState(true);
+  const timerRef = useRef(null);
+  const flatListRef = useRef(null);
 
   const fetchRecipeDetail = useCallback(async () => {
     if (!recipeId) {
@@ -196,6 +218,63 @@ export default function RecipeDetailScreen({
 
   const ingredients = useMemo(() => safeArray(recipe?.ingredients_json), [recipe]);
   const steps = useMemo(() => safeArray(recipe?.steps_json), [recipe]);
+
+  // Check if all ingredients are checked
+  const allIngredientsReady = useMemo(() => {
+    if (ingredients.length === 0) return false;
+    return ingredients.every(ing => {
+      const isBought = shoppingList.some(cartItem => 
+        cartItem.name.toLowerCase() === ing.name.toLowerCase() && 
+        cartItem.checked
+      );
+      return localIngredientStatus[ing.name] || isBought;
+    });
+  }, [ingredients, localIngredientStatus, shoppingList]);
+
+  useEffect(() => {
+    if (autoStartCooking && allIngredientsReady && recipe && !cookingModeVisible) {
+      startCooking();
+    }
+  }, [autoStartCooking, allIngredientsReady, recipe]);
+
+  // --- Timer Logic ---
+  useEffect(() => {
+    if (cookingModeVisible && isTimerRunning && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [cookingModeVisible, isTimerRunning, timeLeft]);
+
+  const startCooking = () => {
+    const totalTime = (Number(recipe?.cooking_time) || 30) * 60; // default 30 mins if not set
+    setTimeLeft(totalTime);
+    setCurrentStepIndex(0);
+    setIsTimerRunning(true);
+    setCookingModeVisible(true);
+    setShowCookingGuide(true);
+  };
+
+  const handleSkipTimer = () => {
+    setTimeLeft(0);
+    setIsTimerRunning(false);
+  };
+
+  const handleToggleTimer = () => {
+    setIsTimerRunning(!isTimerRunning);
+  };
+
+  const handleScroll = (event) => {
+    const xOffset = event.nativeEvent.contentOffset.x;
+    const index = Math.round(xOffset / SCREEN_WIDTH);
+    if (index !== currentStepIndex) {
+      setCurrentStepIndex(index);
+      if (showCookingGuide) setShowCookingGuide(false);
+    }
+  };
 
   const handleShareRecipe = async () => {
     if (!recipe) {
@@ -345,8 +424,10 @@ export default function RecipeDetailScreen({
 
     // Sort: checked items at bottom
     const sorted = [...ingredients].sort((a, b) => {
-      const aChecked = localIngredientStatus[a.name] || false;
-      const bChecked = localIngredientStatus[b.name] || false;
+      const aBought = shoppingList.some(c => c.name.toLowerCase() === a.name.toLowerCase() && c.checked);
+      const bBought = shoppingList.some(c => c.name.toLowerCase() === b.name.toLowerCase() && c.checked);
+      const aChecked = localIngredientStatus[a.name] || aBought;
+      const bChecked = localIngredientStatus[b.name] || bBought;
       if (aChecked === bChecked) return 0;
       return aChecked ? 1 : -1;
     });
@@ -361,17 +442,18 @@ export default function RecipeDetailScreen({
           const isChecked = localIngredientStatus[ing.name] || isBought;
           
           return (
-            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
-              <Pressable 
-                onPress={() => toggleLocalIngredient(ing.name)}
-                style={styles.ingCheckbox}
-              >
+            <Pressable 
+              key={`${ing.name}-${idx}`} 
+              style={styles.ingredientRow}
+              onPress={() => toggleLocalIngredient(ing.name)}
+            >
+              <View style={styles.ingCheckbox}>
                 <MaterialCommunityIcons 
                   name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
                   size={20} 
                   color={isChecked ? '#94a3b8' : '#f97316'} 
                 />
-              </Pressable>
+              </View>
               
               <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
                 {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
@@ -379,13 +461,17 @@ export default function RecipeDetailScreen({
 
               {!isChecked && (
                 <Pressable 
-                  onPress={() => addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit);
+                  }}
                   style={styles.ingAddBtn}
+                  hitSlop={8}
                 >
                   <Feather name="plus-circle" size={20} color="#f97316" />
                 </Pressable>
               )}
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -506,16 +592,24 @@ export default function RecipeDetailScreen({
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>Nguyên liệu</Text>
-                <Pressable 
-                  onPress={() => setExpandedIngredients(!expandedIngredients)}
-                  style={[styles.shoppingToggleBtn, expandedIngredients && styles.shoppingToggleBtnActive]}
-                >
-                  <MaterialCommunityIcons 
-                    name={expandedIngredients ? 'chevron-up' : 'format-list-checks'} 
-                    size={22} 
-                    color={expandedIngredients ? '#fff' : '#f97316'} 
-                  />
-                </Pressable>
+                <View style={styles.sectionActions}>
+                  {allIngredientsReady && (
+                    <Pressable onPress={startCooking} style={styles.cookNowBtn}>
+                      <MaterialCommunityIcons name="fire" size={18} color="#fff" />
+                      <Text style={styles.cookNowBtnText}>Nấu ngay!</Text>
+                    </Pressable>
+                  )}
+                  <Pressable 
+                    onPress={() => setExpandedIngredients(!expandedIngredients)}
+                    style={[styles.shoppingToggleBtn, expandedIngredients && styles.shoppingToggleBtnActive]}
+                  >
+                    <MaterialCommunityIcons 
+                      name={expandedIngredients ? 'chevron-up' : 'format-list-checks'} 
+                      size={22} 
+                      color={expandedIngredients ? '#fff' : '#f97316'} 
+                    />
+                  </Pressable>
+                </View>
               </View>
               
               {expandedIngredients ? renderRecipeIngredients() : (
@@ -629,7 +723,89 @@ export default function RecipeDetailScreen({
         </View>
       </ScrollView>
 
-      {!isGuest ? (
+      {/* --- Cooking Mode Modal --- */}
+      <Modal
+        visible={cookingModeVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        <SafeAreaView style={styles.cookingScreen}>
+          {/* Header with Close */}
+          <View style={styles.cookingHeader}>
+            <Pressable onPress={() => setCookingModeVisible(false)} style={styles.closeCookingBtn}>
+              <Feather name="x" size={24} color="#1e293b" />
+            </Pressable>
+            <Text style={styles.cookingTitle} numberOfLines={1}>{recipe?.title}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Timer Display */}
+          <View style={styles.timerContainer}>
+            <Text style={[styles.timerText, timeLeft === 0 && styles.timerFinished]}>
+              {formatTime(timeLeft)}
+            </Text>
+            <View style={styles.timerControls}>
+              <Pressable onPress={handleToggleTimer} style={styles.timerControlBtn}>
+                <MaterialCommunityIcons 
+                  name={isTimerRunning ? 'pause' : 'play'} 
+                  size={32} 
+                  color="#f97316" 
+                />
+                <Text style={styles.timerControlLabel}>{isTimerRunning ? 'Dừng' : 'Tiếp tục'}</Text>
+              </Pressable>
+              <Pressable onPress={handleSkipTimer} style={styles.timerControlBtn}>
+                <MaterialCommunityIcons name="skip-forward" size={32} color="#64748b" />
+                <Text style={styles.timerControlLabel}>Xong ngay</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Steps Flashcards */}
+          <View style={styles.flashcardContainer}>
+            <FlatList
+              ref={flatListRef}
+              data={steps}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              keyExtractor={(item, index) => `step-card-${index}`}
+              renderItem={({ item, index }) => (
+                <View style={styles.flashcard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardNumber}>Bước {index + 1}/{steps.length}</Text>
+                  </View>
+                  <ScrollView contentContainerStyle={styles.cardBodyScroll}>
+                    <Text style={styles.cardContent}>{item.content}</Text>
+                  </ScrollView>
+                </View>
+              )}
+            />
+
+            {/* Instruction Overlay */}
+            {showCookingGuide && (
+              <View pointerEvents="none" style={styles.guideOverlay}>
+                <View style={styles.guideContent}>
+                  <MaterialCommunityIcons name="gesture-swipe-horizontal" size={48} color="#fff" />
+                  <Text style={styles.guideText}>Vuốt trái/phải để xem các bước</Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Progress Dots */}
+          <View style={styles.progressDots}>
+            {steps.map((_, i) => (
+              <View 
+                key={`dot-${i}`} 
+                style={[styles.dot, i === currentStepIndex && styles.dotActive]} 
+              />
+            ))}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {!isGuest && !cookingModeVisible ? (
         <AppBottomNav
           activeKey="home" // Since it's a detail screen, highlighting 'home' or nothing is fine
           onTabPress={handleBottomTabPress}
@@ -840,6 +1016,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  sectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -1008,6 +1189,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#f97316',
     borderColor: '#f97316',
   },
+  cookNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    shadowColor: '#10b981',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cookNowBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   expandedIngredients: {
     marginTop: 4,
     padding: 10,
@@ -1037,5 +1237,120 @@ const styles = StyleSheet.create({
   },
   ingAddBtn: {
     padding: 4,
+  },
+
+  // --- Cooking Mode Styles ---
+  cookingScreen: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  cookingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  closeCookingBtn: {
+    padding: 8,
+  },
+  cookingTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  timerContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    backgroundColor: '#f8fafc',
+  },
+  timerText: {
+    fontSize: 64,
+    fontWeight: '800',
+    color: '#1e293b',
+    fontVariant: ['tabular-nums'],
+  },
+  timerFinished: {
+    color: '#ef4444',
+  },
+  timerControls: {
+    flexDirection: 'row',
+    gap: 40,
+    marginTop: 16,
+  },
+  timerControlBtn: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  timerControlLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  flashcardContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  flashcard: {
+    width: SCREEN_WIDTH,
+    padding: 24,
+    alignItems: 'center',
+  },
+  cardNumber: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#f97316',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  cardBodyScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: 40,
+  },
+  cardContent: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#334155',
+    lineHeight: 36,
+    textAlign: 'center',
+  },
+  progressDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingBottom: 24,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#e2e8f0',
+  },
+  dotActive: {
+    backgroundColor: '#f97316',
+    width: 20,
+  },
+  guideOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  guideContent: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  guideText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

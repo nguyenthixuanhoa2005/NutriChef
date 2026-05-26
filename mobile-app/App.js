@@ -203,12 +203,15 @@ export default function App() {
     resetTo('home');
   };
 
-  const handleOpenRecipeDetail = (recipeId) => {
+  const [selectedRecipeOptions, setSelectedRecipeOptions] = useState({});
+
+  const handleOpenRecipeDetail = (recipeId, options = {}) => {
     if (!recipeId) {
       return;
     }
 
     setSelectedRecipeId(recipeId);
+    setSelectedRecipeOptions(options);
     navigateTo('recipe-detail');
   };
 
@@ -343,6 +346,7 @@ export default function App() {
           onNavigateFavorites={() => navigateTo('favorites')}
           onNavigateUpgrade={() => navigateTo('upgrade')}
           onNavigateShopping={handleShoppingTabPress}
+          onOpenRecipeDetail={handleOpenRecipeDetail}
           onGoBack={() => goBack('home')}
           onRequestLogout={handleLogout}
         />
@@ -429,6 +433,7 @@ export default function App() {
       return (
         <RecipeDetailScreen
           recipeId={selectedRecipeId}
+          autoStartCooking={selectedRecipeOptions?.autoStartCooking}
           isGuest={!currentUser}
           user={currentUser}
           usageCount={usageCount}

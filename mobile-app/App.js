@@ -430,8 +430,18 @@ export default function App() {
         <RecipeDetailScreen
           recipeId={selectedRecipeId}
           isGuest={!currentUser}
+          user={currentUser}
+          usageCount={usageCount}
           onBack={handleBackFromRecipeDetail}
           onLoginPress={() => navigateTo('login')}
+          onNavigateHome={() => navigateTo('home')}
+          onNavigateSuggest={handleSuggestTabPress}
+          onNavigateMeal={handleMealTabPress}
+          onNavigateRecipeSubmission={handleRecipeSubmitTabPress}
+          onNavigateFavorites={() => navigateTo('favorites')}
+          onNavigateUpgrade={() => navigateTo('upgrade')}
+          onNavigateShopping={handleShoppingTabPress}
+          onRequestLogout={handleLogout}
         />
       );
     }

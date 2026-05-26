@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
-import { authRequest } from '../services/client';
+import { authRequest, request } from '../services/client';
 
 const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
 
@@ -56,6 +56,16 @@ const mealTypeLabel = (value) => {
   return 'Bữa ăn';
 };
 
+const parseIngredientList = (json) => {
+  if (!json) return [];
+  try {
+    const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+};
+
 export default function UserFavoritesScreen({
   isGuest = false,
   user,
@@ -83,8 +93,60 @@ export default function UserFavoritesScreen({
   // New state for ingredient expansion
   const [expandedRecipeId, setExpandedRecipeId] = useState(null);
   const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [recipeId]: { [ingName]: boolean } }
+  const [fetchingRecipeId, setFetchingRecipeId] = useState(null);
 
   const displayEmail = useMemo(() => user?.email || 'user@nutrichef.app', [user]);
+
+  const fetchRecipeDetailIfMissing = async (recipe, type = 'direct') => {
+    // Check if we already have ingredients
+    const existingIngredients = parseIngredientList(recipe.ingredients_json);
+    if (existingIngredients.length > 0) {
+      return recipe;
+    }
+
+    try {
+      setFetchingRecipeId(recipe.recipe_id);
+      const data = await request(`/api/recipes/${recipe.recipe_id}`);
+      const detail = data?.recipe;
+      
+      if (detail) {
+        // Update the local state with the full detail
+        if (type === 'direct') {
+          setFavoriteRecipes(current => 
+            current.map(r => r.recipe_id === recipe.recipe_id ? { ...r, ...detail } : r)
+          );
+        } else {
+          // It's inside a meal set
+          setMealSetRecipesMap(current => {
+            const nextMap = { ...current };
+            Object.keys(nextMap).forEach(msId => {
+              nextMap[msId] = nextMap[msId].map(r => 
+                r.recipe_id === recipe.recipe_id ? { ...r, ...detail } : r
+              );
+            });
+            return nextMap;
+          });
+        }
+        return { ...recipe, ...detail };
+      }
+    } catch (error) {
+      console.error('Failed to fetch recipe detail for expansion', error);
+    } finally {
+      setFetchingRecipeId(null);
+    }
+    return recipe;
+  };
+
+  const handleToggleExpand = async (recipe, contextId, type) => {
+    if (expandedRecipeId === contextId) {
+      setExpandedRecipeId(null);
+      return;
+    }
+
+    // Attempt to fetch if data is missing
+    await fetchRecipeDetailIfMissing(recipe, type);
+    setExpandedRecipeId(contextId);
+  };
 
   const loadFavorites = useCallback(async () => {
     if (isGuest) {
@@ -322,21 +384,40 @@ export default function UserFavoritesScreen({
         {!loading && activeTab === 'recipes' ? (
           favoriteRecipes.length > 0 ? (
             favoriteRecipes.map((item) => (
-              <Pressable
-                key={`fav-recipe-${item.recipe_id}`}
-                style={styles.itemCard}
-                onPress={() => onOpenRecipeDetail?.(item.recipe_id)}
-              >
-                <Image source={{ uri: item.image_url || FALLBACK_IMAGE }} style={styles.itemImage} />
-                <View style={styles.itemBody}>
-                  <Text style={styles.itemTitle}>{item.title}</Text>
-                  <Text style={styles.itemMeta}>
-                    {Number(item.cooking_time) || 0} phút • {Math.round(Number(item.total_calories) || 0)} kcal
-                  </Text>
-                  <Text style={styles.itemMeta}>Yêu thích: {Number(item.like_count) || 0}</Text>
-                </View>
-                <Feather name="chevron-right" size={18} color="#9ca3af" />
-              </Pressable>
+              <View key={`fav-recipe-${item.recipe_id}`} style={styles.recipeCardWrapper}>
+                <Pressable
+                  style={styles.itemCard}
+                  onPress={() => onOpenRecipeDetail?.(item.recipe_id)}
+                >
+                  <Image source={{ uri: item.image_url || FALLBACK_IMAGE }} style={styles.itemImage} />
+                  <View style={styles.itemBody}>
+                    <Text style={styles.itemTitle}>{item.title}</Text>
+                    <Text style={styles.itemMeta}>
+                      {Number(item.cooking_time) || 0} phút • {Math.round(Number(item.total_calories) || 0)} kcal
+                    </Text>
+                    <Text style={styles.itemMeta}>Yêu thích: {Number(item.like_count) || 0}</Text>
+                  </View>
+                  <View style={styles.itemActions}>
+                    <Pressable 
+                      onPress={() => handleToggleExpand(item, item.recipe_id, 'direct')}
+                      style={[styles.shoppingToggleBtn, expandedRecipeId === item.recipe_id && styles.shoppingToggleBtnActive]}
+                      disabled={fetchingRecipeId === item.recipe_id}
+                    >
+                      {fetchingRecipeId === item.recipe_id ? (
+                        <ActivityIndicator size="small" color="#f97316" />
+                      ) : (
+                        <MaterialCommunityIcons 
+                          name={expandedRecipeId === item.recipe_id ? 'chevron-up' : 'format-list-checks'} 
+                          size={20} 
+                          color={expandedRecipeId === item.recipe_id ? '#fff' : '#f97316'} 
+                        />
+                      )}
+                    </Pressable>
+                    <Feather name="chevron-right" size={18} color="#9ca3af" />
+                  </View>
+                </Pressable>
+                {expandedRecipeId === item.recipe_id && renderRecipeIngredients(item)}
+              </View>
             ))
           ) : (
             <View style={styles.emptyCard}>
@@ -384,20 +465,39 @@ export default function UserFavoritesScreen({
                       <ActivityIndicator size="small" color="#f97316" />
                     ) : (
                       (mealSetRecipesMap[Number(item.meal_set_id)] || []).map((recipe) => (
-                        <Pressable
-                          key={`meal-set-${item.meal_set_id}-recipe-${recipe.recipe_id}`}
-                          style={styles.innerRecipeRow}
-                          onPress={() => onOpenRecipeDetail?.(recipe.recipe_id)}
-                        >
-                          <Image source={{ uri: recipe.image_url || FALLBACK_IMAGE }} style={styles.innerRecipeImage} />
-                          <View style={styles.innerRecipeBody}>
-                            <Text style={styles.innerRecipeTitle}>{recipe.title}</Text>
-                            <Text style={styles.innerRecipeMeta}>
-                              {Number(recipe.cooking_time) || 0} phút • {Math.round(Number(recipe.total_calories) || 0)} kcal
-                            </Text>
-                          </View>
-                          <Feather name="chevron-right" size={16} color="#9ca3af" />
-                        </Pressable>
+                        <View key={`meal-set-${item.meal_set_id}-recipe-${recipe.recipe_id}`} style={styles.recipeCardWrapper}>
+                          <Pressable
+                            style={styles.innerRecipeRow}
+                            onPress={() => onOpenRecipeDetail?.(recipe.recipe_id)}
+                          >
+                            <Image source={{ uri: recipe.image_url || FALLBACK_IMAGE }} style={styles.innerRecipeImage} />
+                            <View style={styles.innerRecipeBody}>
+                              <Text style={styles.innerRecipeTitle}>{recipe.title}</Text>
+                              <Text style={styles.innerRecipeMeta}>
+                                {Number(recipe.cooking_time) || 0} phút • {Math.round(Number(recipe.total_calories) || 0)} kcal
+                              </Text>
+                            </View>
+                            <View style={styles.itemActions}>
+                              <Pressable 
+                                onPress={() => handleToggleExpand(recipe, `${item.meal_set_id}-${recipe.recipe_id}`, 'mealSet')}
+                                style={[styles.shoppingToggleBtn, expandedRecipeId === `${item.meal_set_id}-${recipe.recipe_id}` && styles.shoppingToggleBtnActive]}
+                                disabled={fetchingRecipeId === recipe.recipe_id}
+                              >
+                                {fetchingRecipeId === recipe.recipe_id ? (
+                                  <ActivityIndicator size="small" color="#f97316" />
+                                ) : (
+                                  <MaterialCommunityIcons 
+                                    name={expandedRecipeId === `${item.meal_set_id}-${recipe.recipe_id}` ? 'chevron-up' : 'format-list-checks'} 
+                                    size={18} 
+                                    color={expandedRecipeId === `${item.meal_set_id}-${recipe.recipe_id}` ? '#fff' : '#f97316'} 
+                                  />
+                                )}
+                              </Pressable>
+                              <Feather name="chevron-right" size={16} color="#9ca3af" />
+                            </View>
+                          </Pressable>
+                          {expandedRecipeId === `${item.meal_set_id}-${recipe.recipe_id}` && renderRecipeIngredients(recipe)}
+                        </View>
                       ))
                     )}
                   </View>
@@ -652,5 +752,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#ef4444',
+  },
+  recipeCardWrapper: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shoppingToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shoppingToggleBtnActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  expandedIngredients: {
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  expandedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  ingCheckbox: {
+    marginRight: 8,
+  },
+  ingName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#475569',
+  },
+  ingNameChecked: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  ingAddBtn: {
+    padding: 4,
+  },
+  emptyIngredientsText: {
+    fontSize: 13,
+    color: '#94a3b8',
+    fontStyle: 'italic',
   },
 });

@@ -13,9 +13,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppBottomNav, AppHeader, AppAccountMenu } from '../components/AppChrome';
 import { authRequest, request } from '../services/client';
+
+const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
 
 const MEAL_TIME_OPTIONS = [
   { key: 'breakfast', label: 'Bữa sáng', icon: 'weather-sunset-up' },
@@ -319,6 +322,17 @@ const getDishTypeBadgeInfo = (type) => {
       return { label: 'Khác', color: '#6b7280' };
   }
 };
+
+const parseIngredientList = (json) => {
+  if (!json) return [];
+  try {
+    const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+};
+
 export default function UserMealSetScreen({
   isGuest = false,
   user,
@@ -352,7 +366,51 @@ export default function UserMealSetScreen({
   const [showSaveToast, setShowSaveToast] = useState(false);
   const saveToastTimerRef = useRef(null);
 
+  // New state for ingredient expansion
+  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
+  const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [recipeId]: { [ingName]: boolean } }
+  const [fetchingRecipeId, setFetchingRecipeId] = useState(null);
+
   const totalNutrition = useMemo(() => sumNutrition(mealItems), [mealItems]);
+
+  const fetchRecipeDetailIfMissing = async (recipe) => {
+    const existingIngredients = parseIngredientList(recipe.ingredients_json);
+    if (existingIngredients.length > 0) {
+      return recipe;
+    }
+
+    try {
+      setFetchingRecipeId(recipe.recipe_id);
+      const data = await request(`/api/recipes/${recipe.recipe_id}`);
+      const detail = data?.recipe;
+
+      if (detail) {
+        setMealItems((current) =>
+          current.map((item) =>
+            item.recipe?.recipe_id === recipe.recipe_id
+              ? { ...item, recipe: { ...item.recipe, ...detail } }
+              : item
+          )
+        );
+        return { ...recipe, ...detail };
+      }
+    } catch (error) {
+      console.error('Failed to fetch recipe detail for expansion in meal set', error);
+    } finally {
+      setFetchingRecipeId(null);
+    }
+    return recipe;
+  };
+
+  const handleToggleExpand = async (recipe) => {
+    if (expandedRecipeId === recipe.recipe_id) {
+      setExpandedRecipeId(null);
+      return;
+    }
+
+    await fetchRecipeDetailIfMissing(recipe);
+    setExpandedRecipeId(recipe.recipe_id);
+  };
 
   const selectedGoalMeta = useMemo(
     () => GOAL_OPTIONS.find((g) => g.key === mealGoal) || GOAL_OPTIONS[1],
@@ -640,6 +698,102 @@ export default function UserMealSetScreen({
     }
   };
 
+  const addToShoppingList = async (ingredientName, recipeTitle, qty, unit) => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      let list = saved ? JSON.parse(saved) : [];
+      
+      const newItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: ingredientName,
+        recipeTitle: recipeTitle,
+        qty: qty,
+        unit: unit,
+        checked: false,
+      };
+
+      list.push(newItem);
+      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào giỏ hàng.`);
+    } catch (e) {
+      console.error('Failed to add to shopping list', e);
+    }
+  };
+
+  const toggleLocalIngredient = (recipeId, ingName) => {
+    setLocalIngredientStatus((prev) => {
+      const recipeStatus = prev[recipeId] || {};
+      const isChecked = recipeStatus[ingName] || false;
+      
+      return {
+        ...prev,
+        [recipeId]: {
+          ...recipeStatus,
+          [ingName]: !isChecked,
+        },
+      };
+    });
+  };
+
+  const renderRecipeIngredients = (recipe) => {
+    const rawIngredients = typeof recipe.ingredients_json === 'string'
+      ? JSON.parse(recipe.ingredients_json)
+      : (recipe.ingredients_json || []);
+    
+    if (rawIngredients.length === 0) {
+      return (
+        <View style={styles.expandedIngredients}>
+          <Text style={styles.emptyIngredientsText}>Không có dữ liệu nguyên liệu.</Text>
+        </View>
+      );
+    }
+
+    const statusMap = localIngredientStatus[recipe.recipe_id] || {};
+    
+    const sorted = [...rawIngredients].sort((a, b) => {
+      const aChecked = statusMap[a.name] || false;
+      const bChecked = statusMap[b.name] || false;
+      if (aChecked === bChecked) return 0;
+      return aChecked ? 1 : -1;
+    });
+
+    return (
+      <View style={styles.expandedIngredients}>
+        <Text style={styles.expandedTitle}>Nguyên liệu cần thiết:</Text>
+        {sorted.map((ing, idx) => {
+          const isChecked = statusMap[ing.name] || false;
+          return (
+            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
+              <Pressable 
+                onPress={() => toggleLocalIngredient(recipe.recipe_id, ing.name)}
+                style={styles.ingCheckbox}
+              >
+                <MaterialCommunityIcons 
+                  name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
+                  size={18} 
+                  color={isChecked ? '#94a3b8' : '#f97316'} 
+                />
+              </Pressable>
+              
+              <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
+                {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
+              </Text>
+
+              {!isChecked && (
+                <Pressable 
+                  onPress={() => addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit)}
+                  style={styles.ingAddBtn}
+                >
+                  <Feather name="plus-circle" size={18} color="#f97316" />
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   const handleSwapMealItem = (index) => {
     const uniquePool = dedupeRecipes(recipePool);
     if (uniquePool.length <= 1) {
@@ -890,49 +1044,69 @@ export default function UserMealSetScreen({
               {mealItems.map((item, index) => {
                 const badge = getDishTypeBadgeInfo(item.recipe?.dish_type);
                 return (
-                  <View key={item.key} style={styles.menuItemCard}>
-                    <View style={styles.imageContainer}>
-                      <Image source={{ uri: resolveRecipeImage(item.recipe?.image_url) }} style={styles.menuItemImage} />
-                      <View style={[styles.dishTypeBadge, { backgroundColor: badge.color }]}>
-                        <Text style={styles.dishTypeBadgeText}>{badge.label}</Text>
+                  <View key={item.key} style={styles.menuItemWrapper}>
+                    <View style={styles.menuItemCard}>
+                      <View style={styles.imageContainer}>
+                        <Image source={{ uri: resolveRecipeImage(item.recipe?.image_url) }} style={styles.menuItemImage} />
+                        <View style={[styles.dishTypeBadge, { backgroundColor: badge.color }]}>
+                          <Text style={styles.dishTypeBadgeText}>{badge.label}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.menuItemBody}>
+                        <Text style={styles.menuItemTitle}>{item.recipe?.title || item.slotLabel}</Text>
+                        <Text style={styles.menuItemSub}>{item.slotLabel}</Text>
+                        <Text style={styles.menuItemMeta}>
+                          {item.recipe?.difficulty || '--'} • {item.recipe?.cooking_time || '--'} phút • {item.ingredientCount || 0} nguyên liệu
+                        </Text>
+                        {item.recipe?.description ? (
+                          <Text numberOfLines={2} style={styles.menuItemDescription}>{item.recipe.description}</Text>
+                        ) : null}
+                        <Pressable style={styles.swapButton} onPress={() => handleSwapMealItem(index)}>
+                          <MaterialCommunityIcons name="swap-horizontal" size={16} color="#f97316" />
+                          <Text style={styles.swapButtonText}>Đổi món này</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.menuSideMeta}>
+                        <View style={styles.calorieChip}>
+                          <Text style={styles.calorieChipText}>{toDbCalories(item.calories) ?? '--'} kcal</Text>
+                        </View>
+                        <View style={styles.itemActionGroup}>
+                          <Pressable
+                            onPress={() => handleToggleRecipeFavorite(item.recipe?.recipe_id)}
+                            disabled={favoritePendingId === Number(item.recipe?.recipe_id)}
+                          >
+                            {favoritePendingId === Number(item.recipe?.recipe_id) ? (
+                              <ActivityIndicator size="small" color="#ef4444" />
+                            ) : (
+                              <Feather
+                                name="heart"
+                                size={18}
+                                color={favoriteRecipeMap[Number(item.recipe?.recipe_id)] ? '#ef4444' : '#9ca3af'}
+                              />
+                            )}
+                          </Pressable>
+                          <Pressable 
+                            onPress={() => handleToggleExpand(item.recipe)}
+                            style={[styles.shoppingToggleBtn, expandedRecipeId === item.recipe?.recipe_id && styles.shoppingToggleBtnActive]}
+                            disabled={fetchingRecipeId === item.recipe?.recipe_id}
+                          >
+                            {fetchingRecipeId === item.recipe?.recipe_id ? (
+                              <ActivityIndicator size="small" color="#f97316" />
+                            ) : (
+                              <MaterialCommunityIcons 
+                                name={expandedRecipeId === item.recipe?.recipe_id ? 'chevron-up' : 'format-list-checks'} 
+                                size={18} 
+                                color={expandedRecipeId === item.recipe?.recipe_id ? '#fff' : '#f97316'} 
+                              />
+                            )}
+                          </Pressable>
+                          <Pressable onPress={() => onOpenRecipeDetail?.(item.recipe?.recipe_id)}>
+                            <Feather name="eye" size={18} color="#60a5fa" />
+                          </Pressable>
+                        </View>
                       </View>
                     </View>
-                    <View style={styles.menuItemBody}>
-                      <Text style={styles.menuItemTitle}>{item.recipe?.title || item.slotLabel}</Text>
-                      <Text style={styles.menuItemSub}>{item.slotLabel}</Text>
-                      <Text style={styles.menuItemMeta}>
-                        {item.recipe?.difficulty || '--'} • {item.recipe?.cooking_time || '--'} phút • {item.ingredientCount || 0} nguyên liệu
-                      </Text>
-                      {item.recipe?.description ? (
-                        <Text numberOfLines={2} style={styles.menuItemDescription}>{item.recipe.description}</Text>
-                      ) : null}
-                      <Pressable style={styles.swapButton} onPress={() => handleSwapMealItem(index)}>
-                        <MaterialCommunityIcons name="swap-horizontal" size={16} color="#f97316" />
-                        <Text style={styles.swapButtonText}>Đổi món này</Text>
-                      </Pressable>
-                    </View>
-                    <View style={styles.menuSideMeta}>
-                      <View style={styles.calorieChip}>
-                        <Text style={styles.calorieChipText}>{toDbCalories(item.calories) ?? '--'} kcal</Text>
-                      </View>
-                      <Pressable
-                        onPress={() => handleToggleRecipeFavorite(item.recipe?.recipe_id)}
-                        disabled={favoritePendingId === Number(item.recipe?.recipe_id)}
-                      >
-                        {favoritePendingId === Number(item.recipe?.recipe_id) ? (
-                          <ActivityIndicator size="small" color="#ef4444" />
-                        ) : (
-                          <Feather
-                            name="heart"
-                            size={18}
-                            color={favoriteRecipeMap[Number(item.recipe?.recipe_id)] ? '#ef4444' : '#9ca3af'}
-                          />
-                        )}
-                      </Pressable>
-                      <Pressable onPress={() => onOpenRecipeDetail?.(item.recipe?.recipe_id)}>
-                        <Feather name="eye" size={18} color="#60a5fa" />
-                      </Pressable>
-                    </View>
+                    {expandedRecipeId === item.recipe?.recipe_id && renderRecipeIngredients(item.recipe)}
                   </View>
                 );
               })}
@@ -1212,11 +1386,14 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
   },
-  menuItemCard: {
+  menuItemWrapper: {
+    backgroundColor: '#fff',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#eceff3',
-    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  menuItemCard: {
     padding: 10,
     flexDirection: 'row',
     gap: 10,
@@ -1299,6 +1476,61 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     minWidth: 58,
+  },
+  itemActionGroup: {
+    gap: 12,
+    alignItems: 'center',
+  },
+  shoppingToggleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shoppingToggleBtnActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  expandedIngredients: {
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  expandedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  ingCheckbox: {
+    marginRight: 8,
+  },
+  ingName: {
+    flex: 1,
+    fontSize: 13,
+    color: '#475569',
+  },
+  ingNameChecked: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  ingAddBtn: {
+    padding: 4,
+  },
+  emptyIngredientsText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontStyle: 'italic',
   },
   calorieChip: {
     borderRadius: 999,

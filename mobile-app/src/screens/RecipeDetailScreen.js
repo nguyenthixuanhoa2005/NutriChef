@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -12,11 +13,21 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { authRequest, request } from '../services/client';
+import { AppBottomNav } from '../components/AppChrome';
+
+const SHOPPING_LIST_STORAGE_KEY = 'nutrichef_shopping_list';
 
 const FALLBACK_RECIPE_IMAGE =
   'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80';
+
+const FONT_BOLD = Platform.select({
+  ios: 'AvenirNext-DemiBold',
+  android: 'sans-serif-condensed',
+  default: 'system-ui',
+});
 
 const formatNumber = (value) => new Intl.NumberFormat('vi-VN').format(Number(value) || 0);
 
@@ -82,8 +93,17 @@ const dbCaloriesLabel = (value) => {
 export default function RecipeDetailScreen({
   recipeId,
   isGuest = true,
+  user,
+  usageCount,
   onBack,
   onLoginPress,
+  onNavigateHome,
+  onNavigateSuggest,
+  onNavigateMeal,
+  onNavigateRecipeSubmission,
+  onNavigateFavorites,
+  onNavigateUpgrade,
+  onNavigateShopping,
 }) {
   const [recipe, setRecipe] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -94,6 +114,10 @@ export default function RecipeDetailScreen({
   const [userScore, setUserScore] = useState(5);
   const [userComment, setUserComment] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
+
+  // New state for ingredient checklist
+  const [expandedIngredients, setExpandedIngredients] = useState(false);
+  const [localIngredientStatus, setLocalIngredientStatus] = useState({}); // { [ingName]: boolean }
 
   const fetchRecipeDetail = useCallback(async () => {
     if (!recipeId) {
@@ -243,6 +267,94 @@ export default function RecipeDetailScreen({
     }
   };
 
+  const addToShoppingList = async (ingredientName, recipeTitle, qty, unit) => {
+    try {
+      const saved = await AsyncStorage.getItem(SHOPPING_LIST_STORAGE_KEY);
+      let list = saved ? JSON.parse(saved) : [];
+      
+      const newItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+        name: ingredientName,
+        recipeTitle: recipeTitle,
+        qty: qty,
+        unit: unit,
+        checked: false,
+      };
+
+      list.push(newItem);
+      await AsyncStorage.setItem(SHOPPING_LIST_STORAGE_KEY, JSON.stringify(list));
+      Alert.alert('Thành công', `Đã thêm "${ingredientName}" vào giỏ hàng.`);
+    } catch (e) {
+      console.error('Failed to add to shopping list', e);
+    }
+  };
+
+  const toggleLocalIngredient = (ingName) => {
+    setLocalIngredientStatus((prev) => ({
+      ...prev,
+      [ingName]: !prev[ingName],
+    }));
+  };
+
+  const renderRecipeIngredients = () => {
+    if (ingredients.length === 0) {
+      return <Text style={styles.placeholderText}>Chưa có dữ liệu nguyên liệu.</Text>;
+    }
+
+    // Sort: checked items at bottom
+    const sorted = [...ingredients].sort((a, b) => {
+      const aChecked = localIngredientStatus[a.name] || false;
+      const bChecked = localIngredientStatus[b.name] || false;
+      if (aChecked === bChecked) return 0;
+      return aChecked ? 1 : -1;
+    });
+
+    return (
+      <View style={styles.expandedIngredients}>
+        {sorted.map((ing, idx) => {
+          const isChecked = localIngredientStatus[ing.name] || false;
+          return (
+            <View key={`${ing.name}-${idx}`} style={styles.ingredientRow}>
+              <Pressable 
+                onPress={() => toggleLocalIngredient(ing.name)}
+                style={styles.ingCheckbox}
+              >
+                <MaterialCommunityIcons 
+                  name={isChecked ? 'checkbox-marked' : 'checkbox-blank-outline'} 
+                  size={20} 
+                  color={isChecked ? '#94a3b8' : '#f97316'} 
+                />
+              </Pressable>
+              
+              <Text style={[styles.ingName, isChecked && styles.ingNameChecked]}>
+                {ing.name}{ing.qty ? ` (${ing.qty} ${ing.unit || ''})` : ''}
+              </Text>
+
+              {!isChecked && (
+                <Pressable 
+                  onPress={() => addToShoppingList(ing.name, recipe.title, ing.qty, ing.unit)}
+                  style={styles.ingAddBtn}
+                >
+                  <Feather name="plus-circle" size={20} color="#f97316" />
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const handleBottomTabPress = (tabKey) => {
+    if (tabKey === 'home') onNavigateHome?.();
+    else if (tabKey === 'suggest') onNavigateSuggest?.();
+    else if (tabKey === 'menu') onNavigateMeal?.();
+    else if (tabKey === 'recipes') onNavigateRecipeSubmission?.();
+    else if (tabKey === 'favorites') onNavigateFavorites?.();
+    else if (tabKey === 'upgrade') onNavigateUpgrade?.();
+    else if (tabKey === 'shopping') onNavigateShopping?.();
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -345,18 +457,33 @@ export default function RecipeDetailScreen({
             ) : null}
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Nguyên liệu</Text>
-              {ingredients.length === 0 ? (
-                <Text style={styles.placeholderText}>Chưa có dữ liệu nguyên liệu.</Text>
-              ) : (
-                ingredients.map((item, index) => (
-                  <View key={`ing-${index}`} style={styles.listRow}>
-                    <Text style={styles.bullet}>•</Text>
-                    <Text style={styles.listText}>
-                      {item?.name || 'Nguyên liệu'} {item?.qty ? `- ${item.qty}` : ''} {item?.unit || ''}
-                    </Text>
-                  </View>
-                ))
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Nguyên liệu</Text>
+                <Pressable 
+                  onPress={() => setExpandedIngredients(!expandedIngredients)}
+                  style={[styles.shoppingToggleBtn, expandedIngredients && styles.shoppingToggleBtnActive]}
+                >
+                  <MaterialCommunityIcons 
+                    name={expandedIngredients ? 'chevron-up' : 'format-list-checks'} 
+                    size={22} 
+                    color={expandedIngredients ? '#fff' : '#f97316'} 
+                  />
+                </Pressable>
+              </View>
+              
+              {expandedIngredients ? renderRecipeIngredients() : (
+                ingredients.length === 0 ? (
+                  <Text style={styles.placeholderText}>Chưa có dữ liệu nguyên liệu.</Text>
+                ) : (
+                  ingredients.map((item, index) => (
+                    <View key={`ing-${index}`} style={styles.listRow}>
+                      <Text style={styles.bullet}>•</Text>
+                      <Text style={styles.listText}>
+                        {item?.name || 'Nguyên liệu'} {item?.qty ? `- ${item.qty}` : ''} {item?.unit || ''}
+                      </Text>
+                    </View>
+                  ))
+                )
               )}
             </View>
 
@@ -454,6 +581,15 @@ export default function RecipeDetailScreen({
           </View>
         </View>
       </ScrollView>
+
+      {!isGuest ? (
+        <AppBottomNav
+          activeKey="home" // Since it's a detail screen, highlighting 'home' or nothing is fine
+          onTabPress={handleBottomTabPress}
+          user={user}
+          usageCount={usageCount}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -466,7 +602,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 14,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 80, // Space for bottom nav
   },
   loadingWrap: {
     flex: 1,
@@ -651,11 +787,16 @@ const styles = StyleSheet.create({
   section: {
     marginTop: 10,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 8,
   },
   sectionContent: {
     color: '#374151',
@@ -805,5 +946,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
     lineHeight: 20,
+  },
+  shoppingToggleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shoppingToggleBtnActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  expandedIngredients: {
+    marginTop: 4,
+    padding: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  ingCheckbox: {
+    marginRight: 10,
+  },
+  ingName: {
+    flex: 1,
+    fontSize: 15,
+    color: '#334155',
+  },
+  ingNameChecked: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  ingAddBtn: {
+    padding: 4,
   },
 });
